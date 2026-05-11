@@ -2,11 +2,22 @@ const { createServer } = require('http')
 const { parse } = require('url')
 const next = require('next')
 const { Server } = require('socket.io')
+const os = require('os')
 
-const dev = process.env.NODE_ENV !== 'production'
-const hostname = 'localhost'
+// Rileva l'IP LAN della macchina (es. 192.168.1.x)
+const nets = Object.values(os.networkInterfaces() || {}).flat()
+const lanIP = nets.find(n => n && n.family === 'IPv4' && !n.internal)?.address || 'localhost'
+
 const port = process.env.PORT || 3000
 
+// DEVE essere impostato PRIMA che Next.js carichi NextAuth, altrimenti getServerSession() lancia "Invalid URL"
+if (!process.env.NEXTAUTH_URL || process.env.NEXTAUTH_URL === '') {
+  process.env.NEXTAUTH_URL = `http://${lanIP}:${port}`
+  console.log(`> NEXTAUTH_URL impostato automaticamente: ${process.env.NEXTAUTH_URL}`)
+}
+
+const dev = process.env.NODE_ENV !== 'production'
+const hostname = '0.0.0.0'  // Ascolta su tutta la rete
 const app = next({ dev, hostname, port })
 const handle = app.getRequestHandler()
 
@@ -69,6 +80,17 @@ app.prepare().then(() => {
       process.exit(1)
     })
     .listen(port, () => {
-      console.log(`> Ready on http://${hostname}:${port}`)
+      const nets = os.networkInterfaces()
+      const lanIPs = Object.values(nets)
+        .flat()
+        .filter(n => n.family === 'IPv4' && !n.internal)
+        .map(n => n.address)
+
+      console.log(`\n> Server locale: http://localhost:${port}`)
+      if (lanIPs.length > 0) {
+        console.log(`> Da telefono:   http://${lanIPs[0]}:${port}`)
+        console.log(`> Admin mobile:  http://${lanIPs[0]}:${port}/admin/login`)
+      }
+      console.log()
     })
 })
