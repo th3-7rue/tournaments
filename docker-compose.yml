@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: tournament_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://admin:password123@db:5432/tournament_db?schema=public
+      - NEXTAUTH_SECRET=supersecret123
+      - NEXTAUTH_URL=http://localhost:3000
+    depends_on:
+      - db
+    restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id       String @id @default(uuid())
+  username String @unique
+  password String 
+}
+
+model Tournament {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  startDate   DateTime?
+  endDate     DateTime?
+  status      TournamentStatus @default(DRAFT)
+  format      TournamentFormat @default(ROUND_ROBIN)
+  sport       Sport            @default(FOOTBALL)
+  
+  teams       Team[]
+  groups      Group[]
+  matches     Match[]
+  standings   Standing[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum TournamentStatus {
+  DRAFT
+  ONGOING
+  COMPLETED
+}
+
+enum TournamentFormat {
+  ROUND_ROBIN           // Gironi all'italiana
+  CHAMPIONS_LEAGUE      // Misto: Gironi + Eliminazione diretta
+  SINGLE_ELIMINATION    // Eliminazione Diretta
+  DOUBLE_ELIMINATION    // Doppia Eliminazione
+}
+
+enum Sport {
+  FOOTBALL
+  BASKETBALL
+  VOLLEYBALL
+  TENNIS
+  PADEL
+  CUSTOM
+}
+
+model Group {
+  id           String      @id @default(uuid())
+  name         String      // es. "Girone A"
+  
+  tournamentId String
+  tournament   Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  
+  teams        Team[]
+  matches      Match[]
+  standings    Standing[]
+}
+
+model Team {
+  id           String      @id @default(uuid())
+  name         String
+  logo         String?
+  
+  tournamentId String
+  tournament   Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  
+  groupId      String?
+  group        Group?      @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  
+  matchesHome  Match[]     @relation("HomeTeam")
+  matchesAway  Match[]     @relation("AwayTeam")
+  standings    Standing[]
+  
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model Match {
+  id               String      @id @default(uuid())
+  
+  tournamentId     String
+  tournament       Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  
+  groupId          String?
+  group            Group?      @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  
+  homeTeamId       String?
+  homeTeam         Team?       @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  
+  awayTeamId       String?
+  awayTeam         Team?       @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  
+  homeScore        Int?
+  awayScore        Int?
+  
+  // Link per albero del tabellone (Eliminazione Diretta / Doppia Eliminazione)
+  nextMatchId      String?     @map("next_match_id")
+  nextLoserMatchId String?     @map("next_loser_match_id")
+  
+  matchDate        DateTime?
+  status           MatchStatus @default(SCHEDULED)
+  stage            MatchStage  @default(GROUP_STAGE)
+  bracket          BracketType @default(NONE)
+  
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+}
+
+enum MatchStatus {
+  SCHEDULED
+  LIVE
+  FINISHED
+}
+
+enum MatchStage {
+  GROUP_STAGE
+  ROUND_OF_16
+  QUARTER_FINAL
+  SEMI_FINAL
+  FINAL
+  BRONZE_FINAL // Terzo-Quarto posto
+}
+
+enum BracketType {
+  WINNER
+  LOSER
+  NONE
+}
+
+model Standing {
+  id             String     @id @default(uuid())
+  
+  tournamentId   String
+  tournament     Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  
+  groupId        String?
+  group          Group?     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  
+  teamId         String
+  team           Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  
+  points         Int        @default(0)
+  matchesPlayed  Int        @default(0)
+  wins           Int        @default(0)
+  draws          Int        @default(0)
+  losses         Int        @default(0)
+  goalsFor       Int        @default(0)
+  goalsAgainst   Int        @default(0)
+  goalDifference Int        @default(0)
+  
+  @@unique([tournamentId, teamId, groupId])
+}
