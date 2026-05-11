@@ -1,8 +1,6 @@
-import { PrismaClient } from "@prisma/client"
-import { updateMatchScore } from "@/app/actions"
 import MatchForm from "./MatchForm"
-
-const prisma = new PrismaClient()
+import prisma from "@/lib/prisma"
+import Link from "next/link"
 
 export default async function AdminMatchesPage() {
   const tournaments = await prisma.tournament.findMany({
@@ -29,22 +27,61 @@ export default async function AdminMatchesPage() {
     <div className="max-w-4xl mx-auto space-y-12">
       <div>
         <h1 className="text-3xl font-extrabold text-slate-800 mb-2">Risultati Partite</h1>
-        <p className="text-slate-500">Aggiorna i risultati in tempo reale. Le classifiche si ricalcoleranno automaticamente.</p>
+        <p className="text-slate-500">
+          Inserisci i risultati manualmente, o usa il{' '}
+          <span className="font-semibold text-indigo-600">segnapunti live</span>{' '}
+          (▶) per registrare punto per punto direttamente dal telefono.
+        </p>
       </div>
 
       {tournaments.map(tournament => (
         <div key={tournament.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="bg-slate-900 px-6 py-4 flex justify-between items-center">
             <h2 className="text-xl font-bold text-white">{tournament.name}</h2>
-            <span className="text-xs font-semibold bg-indigo-500/30 text-indigo-100 px-3 py-1 rounded-full">{tournament.sport}</span>
+            <span className="text-xs font-semibold bg-indigo-500/30 text-indigo-100 px-3 py-1 rounded-full">
+              {tournament.sport}
+            </span>
           </div>
-          
-          <div className="p-6 space-y-4 max-h-[600px] overflow-y-auto">
+
+          <div className="p-6 space-y-3 max-h-[700px] overflow-y-auto">
             {tournament.matches.length === 0 ? (
               <p className="text-slate-500 italic">Nessuna partita generata.</p>
             ) : (
               tournament.matches.map((m: any) => (
-                <MatchForm key={m.id} match={m} tournament={tournament} />
+                <div key={m.id} className="space-y-2">
+                  {/* Live Scorer button */}
+                  <div className="flex items-center justify-end gap-2 mb-1">
+                    {m.status !== 'FINISHED' && (
+                      <Link
+                        href={`/admin/matches/${m.id}/live`}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition shadow-sm ${
+                          m.status === 'LIVE'
+                            ? 'bg-red-100 text-red-700 hover:bg-red-200 ring-1 ring-red-300'
+                            : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                        }`}
+                      >
+                        {m.status === 'LIVE' ? (
+                          <>
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping inline-block" />
+                            Segnapunti Live →
+                          </>
+                        ) : (
+                          <>▶ Inizia partita</>
+                        )}
+                      </Link>
+                    )}
+                    {m.status === 'FINISHED' && (
+                      <Link
+                        href={`/admin/matches/${m.id}/live`}
+                        className="text-xs text-slate-400 hover:text-slate-600 transition"
+                      >
+                        ✎ Modifica
+                      </Link>
+                    )}
+                  </div>
+
+                  <MatchForm match={m} tournament={tournament} />
+                </div>
               ))
             )}
           </div>

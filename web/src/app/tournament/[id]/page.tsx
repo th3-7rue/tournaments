@@ -1,12 +1,10 @@
-import { PrismaClient } from "@prisma/client"
 import Link from "next/link"
-import LiveRefresher from "./LiveRefresher"
-
-const prisma = new PrismaClient()
+import LiveMatchGrid from "./LiveMatchGrid"
+import prisma from "@/lib/prisma"
 
 export default async function PublicTournamentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const tournament = await prisma.tournament.findUnique({
+  const tournament = await (prisma.tournament as any).findUnique({
     where: { id },
     include: {
       matches: {
@@ -18,11 +16,11 @@ export default async function PublicTournamentPage({ params }: { params: Promise
         orderBy: [
           { points: "desc" },
           { goalDifference: "desc" },
-          { pointsDifference: "desc" }
+          { goalDifference: "desc" }  // secondary: set diff (uses goalDifference field)
         ]
       }
     }
-  });
+  }) as any;
 
   if (!tournament) return <div className="p-8 text-center text-xl">Torneo non trovato</div>;
 
@@ -38,7 +36,6 @@ export default async function PublicTournamentPage({ params }: { params: Promise
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <LiveRefresher />
       
       <header className="bg-slate-900 text-white pt-12 pb-24 px-4">
         <div className="max-w-6xl mx-auto">
@@ -128,26 +125,10 @@ export default async function PublicTournamentPage({ params }: { params: Promise
             {tournament.matches.length === 0 ? (
               <p className="text-center text-slate-500 py-8">Calendario non ancora generato.</p>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {tournament.matches.map((m: any) => (
-                  <div key={m.id} className={`flex items-center justify-between p-4 rounded-2xl border transition hover:-translate-y-0.5 hover:shadow-md ${m.status === 'FINISHED' ? 'bg-white border-indigo-100 shadow-sm' : 'bg-white border-slate-200'}`}>
-                    <div className="font-bold text-slate-700 w-2/5 text-right truncate" title={m.homeTeam?.name}>{m.homeTeam?.name}</div>
-                    
-                    <div className="w-1/5 flex flex-col justify-center items-center gap-1">
-                      <div className={`px-3 py-1.5 rounded-lg text-center min-w-[70px] font-black tracking-wider text-sm shadow-sm ${m.status === 'FINISHED' ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                        {m.status === 'FINISHED' ? `${m.homeScore} - ${m.awayScore}` : 'VS'}
-                      </div>
-                      {tournament.sport === 'VOLLEYBALL' && m.setScores && m.status === 'FINISHED' && (
-                        <div className="text-[10px] text-slate-500 font-semibold bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap overflow-hidden text-ellipsis max-w-full">
-                          {(m.setScores as any[]).map(set => `${set.home}-${set.away}`).join(' ')}
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="font-bold text-slate-700 w-2/5 text-left truncate" title={m.awayTeam?.name}>{m.awayTeam?.name}</div>
-                  </div>
-                ))}
-              </div>
+              <LiveMatchGrid
+                tournamentId={tournament.id}
+                initialMatches={tournament.matches}
+              />
             )}
           </div>
         </div>

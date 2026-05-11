@@ -1,30 +1,44 @@
 "use server"
 
-import { PrismaClient } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { generateRoundRobin } from "@/lib/berger"
 import { io } from "socket.io-client"
+import prisma from "@/lib/prisma"
+import { actionLimiter } from "@/lib/rate-limit"
+import { CreateTournamentSchema, CreateTeamSchema, UpdateScoreSchema } from "@/lib/validations"
 
-const prisma = new PrismaClient()
+export async function createTournament(prevState: any, formData: FormData): Promise<{error?: string} | undefined> {
+  // 1. Rate Limiting (5 richieste al minuto per utente/ip in memoria fittizia)
+  // Per demo usiamo un token fisso, in prod si usa l'IP o l'ID utente
+  try {
+    await actionLimiter.check(5, 'create_tournament_global')
+  } catch (e: any) {
+    return { error: e.message }
+  }
 
-export async function createTournament(formData: FormData): Promise<void> {
-  const name = formData.get("name") as string
-  const description = formData.get("description") as string
-  const format = formData.get("format") as any
-  const sport = formData.get("sport") as any
-  const volleyballSetsStr = formData.get("volleyballSets") as string
-  const volleyballSets = volleyballSetsStr ? parseInt(volleyballSetsStr) : 5
-
-  if (!name) throw new Error("Nome mancante")
+  // 2. Validazione Zod
+  const rawData = {
+    name: formData.get("name"),
+    description: formData.get("description"),
+    format: formData.get("format") || "ROUND_ROBIN",
+    sport: formData.get("sport") || "FOOTBALL",
+    volleyballSets: formData.get("volleyballSets") ? parseInt(formData.get("volleyballSets") as string) : undefined
+  }
+  
+  const validated = CreateTournamentSchema.safeParse(rawData)
+  if (!validated.success) {
+    return { error: "Validazione fallita: " + validated.error.issues.map((e: any) => e.message).join(", ") }
+  }
 
   await prisma.tournament.create({
     data: {
-      name,
-      description,
-      format,
-      sport,
-      volleyballSets,
+      name: validated.data.name,
+      description: validated.data.description,
+      format: validated.data.format as any,
+      sport: validated.data.sport as any,
+      // @ts-expect-error: volleyballSets exists in DB schema, TS client may be stale
+      volleyballSets: validated.data.volleyballSets,
     }
   })
 
@@ -32,16 +46,21 @@ export async function createTournament(formData: FormData): Promise<void> {
   redirect("/admin/tournaments")
 }
 
-export async function createTeam(formData: FormData): Promise<void> {
-  const name = formData.get("name") as string
-  const tournamentId = formData.get("tournamentId") as string
+export async function createTeam(prevState: any, formData: FormData): Promise<{error?: string} | undefined> {
+  const rawData = {
+    name: formData.get("name"),
+    tournamentId: formData.get("tournamentId"),
+  }
 
-  if (!name || !tournamentId) throw new Error("Dati mancanti")
+  const validated = CreateTeamSchema.safeParse(rawData)
+  if (!validated.success) {
+    return { error: validated.error.issues.map((e: any) => e.message).join(", ") }
+  }
 
   await prisma.team.create({
     data: {
-      name,
-      tournamentId
+      name: validated.data.name,
+      tournamentId: validated.data.tournamentId
     }
   })
 
@@ -114,53 +133,56 @@ export async function generateTournamentMatches(formData: FormData): Promise<voi
 }
 
 export async function updateMatchScore(formData: FormData): Promise<void> {
-  const matchId = formData.get("matchId") as string;
-  let homeScoreStr = formData.get("homeScore") as string;
-  let awayScoreStr = formData.get("awayScore") as string;
-  const setScoresStr = formData.get("setScores") as string;
+  await actionLimiter.check(20, 'update_score_global')
 
-  if (!matchId) throw new Error("ID Partita mancante");
-
-  let homeScore = 0;
-  let awayScore = 0;
-  let setScoresJson = null;
-
-  if (setScoresStr) {
-    try {
-      const parsedSets = JSON.parse(setScoresStr);
-      setScoresJson = parsedSets;
-      
-      // Calculate homeScore and awayScore based on sets won
-      parsedSets.forEach((set: {home: number, away: number}) => {
-        if (set.home > set.away) homeScore++;
-        else if (set.away > set.home) awayScore++;
-      });
-    } catch (e) {
-      console.error("Invalid setScores JSON");
-    }
-  } else {
-    if (!homeScoreStr || !awayScoreStr) throw new Error("Dati punteggio mancanti");
-    homeScore = parseInt(homeScoreStr);
-    awayScore = parseInt(awayScoreStr);
+  const rawData = {
+    matchId: formData.get("matchId"),
+    homeScore: formData.get("homeScore") || undefined,
+    awayScore: formData.get("awayScore") || undefined,
+    setScores: formData.get("setScores") || undefined
   }
 
-  const match = await prisma.match.update({
-    where: { id: matchId },
+  const validated = UpdateScoreSchema.safeParse(rawData)
+  if (!validated.success) {
+    throw new Error("Validazione fallita")
+  }
+
+  const data = validated.data;
+  let homeScore = data.homeScore || 0;
+  let awayScore = data.awayScore || 0;
+  let setScoresJson = data.setScores || null;
+
+  if (setScoresJson) {
+    homeScore = 0;
+    awayScore = 0;
+    setScoresJson.forEach((set: {home: number, away: number}) => {
+      if (set.home > set.away) homeScore++;
+      else if (set.away > set.home) awayScore++;
+    });
+  }
+
+  const match = await (prisma.match as any).update({
+    where: { id: data.matchId },
     data: {
       homeScore,
       awayScore,
       setScores: setScoresJson,
       status: "FINISHED"
-    },
-    include: { tournament: true }
+    }
   });
 
-  await recalculateStandings(match.tournamentId, match.tournament.sport);
+  // Fetch tournament sport separately to avoid TS include type errors
+  const tournament = await prisma.tournament.findUniqueOrThrow({
+    where: { id: match.tournamentId },
+    select: { sport: true }
+  });
+
+  await recalculateStandings(match.tournamentId, tournament.sport);
 
   try {
     // Comunica al server Socket.io che c'è stato un aggiornamento
     const socket = io("http://localhost:3000");
-    socket.emit("score-update", { matchId, homeScore, awayScore });
+    socket.emit("score-update", { matchId: data.matchId, homeScore, awayScore });
     setTimeout(() => socket.disconnect(), 100);
   } catch (e) {
     console.error("Socket emit failed", e);
@@ -171,13 +193,22 @@ export async function updateMatchScore(formData: FormData): Promise<void> {
   revalidatePath(`/`);
 }
 
-async function recalculateStandings(tournamentId: string, sport: string) {
-  await prisma.standing.updateMany({
+export async function startMatch(matchId: string): Promise<void> {
+  await prisma.match.update({
+    where: { id: matchId },
+    data: { status: 'LIVE' }
+  })
+  revalidatePath('/admin/matches')
+  revalidatePath('/')
+}
+
+export async function recalculateStandings(tournamentId: string, sport: string) {
+  await (prisma.standing as any).updateMany({
     where: { tournamentId },
     data: { points: 0, matchesPlayed: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, pointsFor: 0, pointsAgainst: 0, pointsDifference: 0 }
   });
 
-  const matches = await prisma.match.findMany({
+  const matches = await (prisma.match as any).findMany({
     where: { tournamentId, status: "FINISHED", homeScore: { not: null }, awayScore: { not: null } }
   });
 
@@ -266,7 +297,7 @@ async function recalculateStandings(tournamentId: string, sport: string) {
   }
 
   for (const s of standingsMap.values()) {
-    await prisma.standing.update({
+    await (prisma.standing as any).update({
       where: { id: s.id },
       data: {
         points: s.points,

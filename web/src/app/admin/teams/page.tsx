@@ -1,7 +1,5 @@
-import { PrismaClient } from "@prisma/client"
+import prisma from "@/lib/prisma"
 import Link from "next/link"
-
-const prisma = new PrismaClient()
 
 export default async function TeamsPage() {
   const teams = await prisma.team.findMany({

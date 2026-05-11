@@ -1,8 +1,6 @@
-import { PrismaClient } from "@prisma/client"
 import { generateTournamentMatches } from "@/app/actions"
 import Link from "next/link"
-
-const prisma = new PrismaClient()
+import prisma from "@/lib/prisma"
 
 export default async function TournamentDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
