@@ -23,6 +23,9 @@ model Tournament {
   format      TournamentFormat @default(ROUND_ROBIN)
   sport       Sport            @default(FOOTBALL)
   
+  // Impostazioni specifiche per Pallavolo
+  volleyballSets Int           @default(5) // 3 (al meglio dei 3) o 5 (al meglio dei 5)
+  
   teams       Team[]
   groups      Group[]
   matches     Match[]
@@ -103,6 +106,8 @@ model Match {
   homeScore        Int?
   awayScore        Int?
   
+  setScores        Json?       // es. [{"home": 25, "away": 20}, {"home": 25, "away": 23}]
+  
   // Link per albero del tabellone (Eliminazione Diretta / Doppia Eliminazione)
   nextMatchId      String?     @map("next_match_id")
   nextLoserMatchId String?     @map("next_loser_match_id")
@@ -157,6 +162,11 @@ model Standing {
   goalsFor       Int        @default(0)
   goalsAgainst   Int        @default(0)
   goalDifference Int        @default(0)
+  
+  // Punti specifici per la pallavolo (o altri sport in futuro)
+  pointsFor        Int      @default(0)
+  pointsAgainst    Int      @default(0)
+  pointsDifference Int      @default(0)
   
   @@unique([tournamentId, teamId, groupId])
 }

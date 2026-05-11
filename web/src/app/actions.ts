@@ -13,6 +13,8 @@ export async function createTournament(formData: FormData): Promise<void> {
   const description = formData.get("description") as string
   const format = formData.get("format") as any
   const sport = formData.get("sport") as any
+  const volleyballSetsStr = formData.get("volleyballSets") as string
+  const volleyballSets = volleyballSetsStr ? parseInt(volleyballSetsStr) : 5
 
   if (!name) throw new Error("Nome mancante")
 
@@ -22,6 +24,7 @@ export async function createTournament(formData: FormData): Promise<void> {
       description,
       format,
       sport,
+      volleyballSets,
     }
   })
 
@@ -112,24 +115,47 @@ export async function generateTournamentMatches(formData: FormData): Promise<voi
 
 export async function updateMatchScore(formData: FormData): Promise<void> {
   const matchId = formData.get("matchId") as string;
-  const homeScoreStr = formData.get("homeScore") as string;
-  const awayScoreStr = formData.get("awayScore") as string;
+  let homeScoreStr = formData.get("homeScore") as string;
+  let awayScoreStr = formData.get("awayScore") as string;
+  const setScoresStr = formData.get("setScores") as string;
 
-  if (!matchId || !homeScoreStr || !awayScoreStr) throw new Error("Dati punteggio mancanti");
+  if (!matchId) throw new Error("ID Partita mancante");
 
-  const homeScore = parseInt(homeScoreStr);
-  const awayScore = parseInt(awayScoreStr);
+  let homeScore = 0;
+  let awayScore = 0;
+  let setScoresJson = null;
+
+  if (setScoresStr) {
+    try {
+      const parsedSets = JSON.parse(setScoresStr);
+      setScoresJson = parsedSets;
+      
+      // Calculate homeScore and awayScore based on sets won
+      parsedSets.forEach((set: {home: number, away: number}) => {
+        if (set.home > set.away) homeScore++;
+        else if (set.away > set.home) awayScore++;
+      });
+    } catch (e) {
+      console.error("Invalid setScores JSON");
+    }
+  } else {
+    if (!homeScoreStr || !awayScoreStr) throw new Error("Dati punteggio mancanti");
+    homeScore = parseInt(homeScoreStr);
+    awayScore = parseInt(awayScoreStr);
+  }
 
   const match = await prisma.match.update({
     where: { id: matchId },
     data: {
       homeScore,
       awayScore,
+      setScores: setScoresJson,
       status: "FINISHED"
-    }
+    },
+    include: { tournament: true }
   });
 
-  await recalculateStandings(match.tournamentId);
+  await recalculateStandings(match.tournamentId, match.tournament.sport);
 
   try {
     // Comunica al server Socket.io che c'è stato un aggiornamento
@@ -145,10 +171,10 @@ export async function updateMatchScore(formData: FormData): Promise<void> {
   revalidatePath(`/`);
 }
 
-async function recalculateStandings(tournamentId: string) {
+async function recalculateStandings(tournamentId: string, sport: string) {
   await prisma.standing.updateMany({
     where: { tournamentId },
-    data: { points: 0, matchesPlayed: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0 }
+    data: { points: 0, matchesPlayed: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDifference: 0, pointsFor: 0, pointsAgainst: 0, pointsDifference: 0 }
   });
 
   const matches = await prisma.match.findMany({
@@ -175,19 +201,67 @@ async function recalculateStandings(tournamentId: string) {
     h.goalDifference = h.goalsFor - h.goalsAgainst;
     a.goalDifference = a.goalsFor - a.goalsAgainst;
 
-    if (m.homeScore! > m.awayScore!) {
-      h.wins += 1;
-      h.points += 3;
-      a.losses += 1;
-    } else if (m.homeScore! < m.awayScore!) {
-      a.wins += 1;
-      a.points += 3;
-      h.losses += 1;
+    if (sport === 'VOLLEYBALL') {
+      // Calculate pointsFor and pointsAgainst from setScores if available
+      let mPointsForHome = 0;
+      let mPointsForAway = 0;
+      if (m.setScores) {
+        try {
+          const sets = m.setScores as any[];
+          sets.forEach(set => {
+            mPointsForHome += Number(set.home) || 0;
+            mPointsForAway += Number(set.away) || 0;
+          });
+        } catch (e) {}
+      }
+      
+      h.pointsFor += mPointsForHome;
+      a.pointsFor += mPointsForAway;
+      h.pointsAgainst += mPointsForAway;
+      a.pointsAgainst += mPointsForHome;
+      h.pointsDifference = h.pointsFor - h.pointsAgainst;
+      a.pointsDifference = a.pointsFor - a.pointsAgainst;
+
+      if (m.homeScore! > m.awayScore!) {
+        h.wins += 1;
+        a.losses += 1;
+        if (m.homeScore! === 3 && m.awayScore! <= 1) {
+          h.points += 3;
+        } else if (m.homeScore! === 3 && m.awayScore! === 2) {
+          h.points += 2;
+          a.points += 1;
+        } else {
+          // Fallback if not playing best of 5
+          h.points += 3;
+        }
+      } else if (m.homeScore! < m.awayScore!) {
+        a.wins += 1;
+        h.losses += 1;
+        if (m.awayScore! === 3 && m.homeScore! <= 1) {
+          a.points += 3;
+        } else if (m.awayScore! === 3 && m.homeScore! === 2) {
+          a.points += 2;
+          h.points += 1;
+        } else {
+          // Fallback if not playing best of 5
+          a.points += 3;
+        }
+      }
     } else {
-      h.draws += 1;
-      a.draws += 1;
-      h.points += 1;
-      a.points += 1;
+      if (m.homeScore! > m.awayScore!) {
+        h.wins += 1;
+        h.points += 3;
+        a.losses += 1;
+      } else if (m.homeScore! < m.awayScore!) {
+        a.wins += 1;
+        a.points += 3;
+        h.losses += 1;
+      } else {
+        h.draws += 1;
+        a.draws += 1;
+        h.points += 1;
+        a.points += 1;
+      }
     }
   }
 
@@ -202,7 +276,10 @@ async function recalculateStandings(tournamentId: string) {
         losses: s.losses,
         goalsFor: s.goalsFor,
         goalsAgainst: s.goalsAgainst,
-        goalDifference: s.goalDifference
+        goalDifference: s.goalDifference,
+        pointsFor: s.pointsFor,
+        pointsAgainst: s.pointsAgainst,
+        pointsDifference: s.pointsDifference
       }
     });
   }

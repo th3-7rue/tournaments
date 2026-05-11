@@ -18,13 +18,23 @@ export default async function PublicTournamentPage({ params }: { params: Promise
         orderBy: [
           { points: "desc" },
           { goalDifference: "desc" },
-          { goalsFor: "desc" }
+          { pointsDifference: "desc" }
         ]
       }
     }
   });
 
   if (!tournament) return <div className="p-8 text-center text-xl">Torneo non trovato</div>;
+
+  const sportLabels = {
+    FOOTBALL: { for: "GF", against: "GS", diff: "DR", forTitle: "Gol Fatti", againstTitle: "Gol Subiti", diffTitle: "Differenza Reti" },
+    VOLLEYBALL: { for: "SF", against: "SS", diff: "DS", forTitle: "Set Vinti", againstTitle: "Set Persi", diffTitle: "Differenza Set" },
+    TENNIS: { for: "SF", against: "SS", diff: "DS", forTitle: "Set Vinti", againstTitle: "Set Persi", diffTitle: "Differenza Set" },
+    PADEL: { for: "SF", against: "SS", diff: "DS", forTitle: "Set Vinti", againstTitle: "Set Persi", diffTitle: "Differenza Set" },
+    BASKETBALL: { for: "PF", against: "PS", diff: "DP", forTitle: "Punti Fatti", againstTitle: "Punti Subiti", diffTitle: "Differenza Punti" },
+    CUSTOM: { for: "PF", against: "PS", diff: "DP", forTitle: "Punti Fatti", againstTitle: "Punti Subiti", diffTitle: "Differenza Punti" }
+  };
+  const labels = sportLabels[tournament.sport as keyof typeof sportLabels] || sportLabels.CUSTOM;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -58,14 +68,20 @@ export default async function PublicTournamentPage({ params }: { params: Promise
                 <tr className="bg-slate-50 text-slate-500 text-sm border-b border-slate-200">
                   <th className="py-4 px-6 font-semibold w-12">#</th>
                   <th className="py-4 px-6 font-semibold">Squadra</th>
-                  <th className="py-4 px-4 font-bold text-slate-800 text-center">PTS</th>
-                  <th className="py-4 px-3 font-semibold text-center">G</th>
-                  <th className="py-4 px-3 font-semibold text-center">V</th>
-                  <th className="py-4 px-3 font-semibold text-center">N</th>
-                  <th className="py-4 px-3 font-semibold text-center">P</th>
-                  <th className="py-4 px-3 font-semibold text-center">GF</th>
-                  <th className="py-4 px-3 font-semibold text-center">GS</th>
-                  <th className="py-4 px-3 font-semibold text-center">DR</th>
+                  <th className="py-4 px-4 font-bold text-slate-800 text-center" title="Punti">PTS</th>
+                  <th className="py-4 px-3 font-semibold text-center" title="Giocate">G</th>
+                  <th className="py-4 px-3 font-semibold text-center" title="Vittorie">V</th>
+                  <th className="py-4 px-3 font-semibold text-center" title="Pareggi">N</th>
+                  <th className="py-4 px-3 font-semibold text-center" title="Sconfitte">P</th>
+                  <th className="py-4 px-3 font-semibold text-center" title={labels.forTitle}>{labels.for}</th>
+                  <th className="py-4 px-3 font-semibold text-center" title={labels.againstTitle}>{labels.against}</th>
+                  <th className="py-4 px-3 font-semibold text-center" title={labels.diffTitle}>{labels.diff}</th>
+                  {tournament.sport === 'VOLLEYBALL' && (
+                    <>
+                      <th className="py-4 px-3 font-semibold text-center text-xs" title="Punti Fatti">PF</th>
+                      <th className="py-4 px-3 font-semibold text-center text-xs" title="Punti Subiti">PS</th>
+                    </>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -89,6 +105,12 @@ export default async function PublicTournamentPage({ params }: { params: Promise
                       <td className="py-4 px-3 font-medium text-slate-600 text-center">{s.goalsFor}</td>
                       <td className="py-4 px-3 font-medium text-slate-600 text-center">{s.goalsAgainst}</td>
                       <td className="py-4 px-3 font-bold text-slate-700 text-center">{s.goalDifference > 0 ? `+${s.goalDifference}` : s.goalDifference}</td>
+                      {tournament.sport === 'VOLLEYBALL' && (
+                        <>
+                          <td className="py-4 px-3 font-medium text-slate-500 text-center text-sm">{s.pointsFor || 0}</td>
+                          <td className="py-4 px-3 font-medium text-slate-500 text-center text-sm">{s.pointsAgainst || 0}</td>
+                        </>
+                      )}
                     </tr>
                   ))
                 )}
@@ -111,10 +133,15 @@ export default async function PublicTournamentPage({ params }: { params: Promise
                   <div key={m.id} className={`flex items-center justify-between p-4 rounded-2xl border transition hover:-translate-y-0.5 hover:shadow-md ${m.status === 'FINISHED' ? 'bg-white border-indigo-100 shadow-sm' : 'bg-white border-slate-200'}`}>
                     <div className="font-bold text-slate-700 w-2/5 text-right truncate" title={m.homeTeam?.name}>{m.homeTeam?.name}</div>
                     
-                    <div className="w-1/5 flex justify-center">
+                    <div className="w-1/5 flex flex-col justify-center items-center gap-1">
                       <div className={`px-3 py-1.5 rounded-lg text-center min-w-[70px] font-black tracking-wider text-sm shadow-sm ${m.status === 'FINISHED' ? 'bg-gradient-to-r from-indigo-600 to-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
                         {m.status === 'FINISHED' ? `${m.homeScore} - ${m.awayScore}` : 'VS'}
                       </div>
+                      {tournament.sport === 'VOLLEYBALL' && m.setScores && m.status === 'FINISHED' && (
+                        <div className="text-[10px] text-slate-500 font-semibold bg-slate-100 px-2 py-0.5 rounded-full whitespace-nowrap overflow-hidden text-ellipsis max-w-full">
+                          {(m.setScores as any[]).map(set => `${set.home}-${set.away}`).join(' ')}
+                        </div>
+                      )}
                     </div>
                     
                     <div className="font-bold text-slate-700 w-2/5 text-left truncate" title={m.awayTeam?.name}>{m.awayTeam?.name}</div>
