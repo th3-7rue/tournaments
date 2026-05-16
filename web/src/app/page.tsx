@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma";
 import Link from "next/link";
+import { SPORT_DISPLAY_NAMES } from "@/lib/sports";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +57,9 @@ export default async function Home() {
                             : "Terminato"}
                       </span>
                       <span className="text-slate-400 text-sm font-semibold uppercase tracking-wider">
-                        {t.sport}
+                        {SPORT_DISPLAY_NAMES[
+                          t.sport as keyof typeof SPORT_DISPLAY_NAMES
+                        ] ?? t.sport}
                       </span>
                     </div>
                     <h3 className="text-xl font-bold text-slate-800 group-hover:text-indigo-600 transition mb-2">

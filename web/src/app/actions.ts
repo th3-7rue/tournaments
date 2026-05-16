@@ -6,6 +6,7 @@ import { generateRoundRobin } from "@/lib/berger";
 import { io } from "socket.io-client";
 import prisma from "@/lib/prisma";
 import { actionLimiter } from "@/lib/rate-limit";
+import { isVolleyballSport } from "@/lib/sports";
 import {
   CreateTournamentSchema,
   CreateTeamSchema,
@@ -279,7 +280,7 @@ export async function recalculateStandings(
     h.goalDifference = h.goalsFor - h.goalsAgainst;
     a.goalDifference = a.goalsFor - a.goalsAgainst;
 
-    if (sport === "VOLLEYBALL") {
+    if (isVolleyballSport(sport)) {
       // Calculate pointsFor and pointsAgainst from setScores if available
       let mPointsForHome = 0;
       let mPointsForAway = 0;

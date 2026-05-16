@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma";
 import Link from "next/link";
+import { SPORT_DISPLAY_NAMES } from "@/lib/sports";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +53,11 @@ export default async function TournamentsPage() {
                       {t.name}
                     </Link>
                   </td>
-                  <td className="p-4 text-slate-600">{t.sport}</td>
+                  <td className="p-4 text-slate-600">
+                    {SPORT_DISPLAY_NAMES[
+                      t.sport as keyof typeof SPORT_DISPLAY_NAMES
+                    ] ?? t.sport}
+                  </td>
                   <td className="p-4 text-slate-600">
                     {t.format.replace("_", " ")}
                   </td>

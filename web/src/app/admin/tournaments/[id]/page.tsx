@@ -1,6 +1,7 @@
 import { generateTournamentMatches } from "@/app/actions";
 import Link from "next/link";
 import prisma from "@/lib/prisma";
+import { SPORT_DISPLAY_NAMES } from "@/lib/sports";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,10 @@ export default async function TournamentDetail({
             {tournament.name}
           </h1>
           <p className="text-slate-500 mt-2">
-            {tournament.sport} • {tournament.format}
+            {SPORT_DISPLAY_NAMES[
+              tournament.sport as keyof typeof SPORT_DISPLAY_NAMES
+            ] ?? tournament.sport}{" "}
+            • {tournament.format}
           </p>
         </div>
         <span
@@ -58,7 +62,7 @@ export default async function TournamentDetail({
           {tournament.teams.length === 0 ? (
             <p className="text-slate-500 italic">Nessuna squadra iscritta.</p>
           ) : (
-            <ul className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+            <ul className="space-y-2 max-h-100 overflow-y-auto pr-2">
               {tournament.teams.map((t: any) => (
                 <li
                   key={t.id}
@@ -88,7 +92,7 @@ export default async function TournamentDetail({
           </div>
 
           {tournament.matches.length === 0 ? (
-            <div className="text-center py-10 flex-grow flex flex-col justify-center">
+            <div className="text-center py-10 grow flex flex-col justify-center">
               <div className="text-5xl mb-4">📅</div>
               <p className="text-slate-500 mb-6">
                 Il calendario non è ancora stato generato.
@@ -102,7 +106,7 @@ export default async function TournamentDetail({
                   />
                   <button
                     type="submit"
-                    className="bg-gradient-to-r from-indigo-600 to-blue-500 hover:from-indigo-700 hover:to-blue-600 text-white px-6 py-3 rounded-lg font-bold shadow-md transition w-full hover:scale-[1.02]"
+                    className="bg-linear-to-r from-indigo-600 to-blue-500 hover:from-indigo-700 hover:to-blue-600 text-white px-6 py-3 rounded-lg font-bold shadow-md transition w-full hover:scale-[1.02]"
                   >
                     Genera Calendario Automagico
                   </button>
@@ -114,7 +118,7 @@ export default async function TournamentDetail({
               )}
             </div>
           ) : (
-            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 flex-grow">
+            <div className="space-y-3 max-h-100 overflow-y-auto pr-2 grow">
               {tournament.matches.map((m: any) => (
                 <div
                   key={m.id}
@@ -127,7 +131,7 @@ export default async function TournamentDetail({
                     {m.homeTeam?.name}
                   </div>
                   <div
-                    className={`px-3 py-1 rounded text-center min-w-[70px] font-black tracking-wider text-sm mx-2 ${m.status === "FINISHED" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-500"}`}
+                    className={`px-3 py-1 rounded text-center min-w-17.5 font-black tracking-wider text-sm mx-2 ${m.status === "FINISHED" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-500"}`}
                   >
                     {m.status === "FINISHED"
                       ? `${m.homeScore} - ${m.awayScore}`

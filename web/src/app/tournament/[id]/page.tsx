@@ -1,6 +1,7 @@
 import Link from "next/link";
 import LiveMatchGrid from "./LiveMatchGrid";
 import prisma from "@/lib/prisma";
+import { SPORT_DISPLAY_NAMES, isVolleyballSport } from "@/lib/sports";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,14 @@ export default async function PublicTournamentPage({
       diffTitle: "Differenza Reti",
     },
     VOLLEYBALL: {
+      for: "SF",
+      against: "SS",
+      diff: "DS",
+      forTitle: "Set Vinti",
+      againstTitle: "Set Persi",
+      diffTitle: "Differenza Set",
+    },
+    BEACH_VOLLEY: {
       for: "SF",
       against: "SS",
       diff: "DS",
@@ -101,7 +110,10 @@ export default async function PublicTournamentPage({
                 {tournament.name}
               </h1>
               <p className="text-slate-400 font-medium text-lg uppercase tracking-wider">
-                {tournament.sport} • {tournament.format.replace("_", " ")}
+                {SPORT_DISPLAY_NAMES[
+                  tournament.sport as keyof typeof SPORT_DISPLAY_NAMES
+                ] ?? tournament.sport}{" "}
+                • {tournament.format.replace("_", " ")}
               </p>
             </div>
             <div className="bg-indigo-500/20 border border-indigo-500/30 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-inner">
@@ -174,7 +186,7 @@ export default async function PublicTournamentPage({
                   >
                     {labels.diff}
                   </th>
-                  {tournament.sport === "VOLLEYBALL" && (
+                  {isVolleyballSport(tournament.sport) && (
                     <>
                       <th
                         className="py-4 px-3 font-semibold text-center text-xs"
@@ -212,7 +224,7 @@ export default async function PublicTournamentPage({
                         {idx + 1}
                       </td>
                       <td className="py-4 px-6 font-bold text-slate-800 flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-100 to-blue-50 text-indigo-600 flex items-center justify-center font-bold text-xs shadow-sm">
+                        <div className="w-8 h-8 rounded-full bg-linear-to-br from-indigo-100 to-blue-50 text-indigo-600 flex items-center justify-center font-bold text-xs shadow-sm">
                           {s.team.name.substring(0, 2).toUpperCase()}
                         </div>
                         {s.team.name}
@@ -243,7 +255,7 @@ export default async function PublicTournamentPage({
                           ? `+${s.goalDifference}`
                           : s.goalDifference}
                       </td>
-                      {tournament.sport === "VOLLEYBALL" && (
+                      {isVolleyballSport(tournament.sport) && (
                         <>
                           <td className="py-4 px-3 font-medium text-slate-500 text-center text-sm">
                             {s.pointsFor || 0}

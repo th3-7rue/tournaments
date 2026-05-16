@@ -1,6 +1,7 @@
 import MatchForm from "./MatchForm";
 import prisma from "@/lib/prisma";
 import Link from "next/link";
+import { SPORT_DISPLAY_NAMES } from "@/lib/sports";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +44,7 @@ export default async function AdminMatchesPage() {
         </p>
       </div>
 
-      {tournaments.map((tournament) => (
+      {tournaments.map((tournament: (typeof tournaments)[number]) => (
         <div
           key={tournament.id}
           className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
@@ -51,11 +52,13 @@ export default async function AdminMatchesPage() {
           <div className="bg-slate-900 px-6 py-4 flex justify-between items-center">
             <h2 className="text-xl font-bold text-white">{tournament.name}</h2>
             <span className="text-xs font-semibold bg-indigo-500/30 text-indigo-100 px-3 py-1 rounded-full">
-              {tournament.sport}
+              {SPORT_DISPLAY_NAMES[
+                tournament.sport as keyof typeof SPORT_DISPLAY_NAMES
+              ] ?? tournament.sport}
             </span>
           </div>
 
-          <div className="p-6 space-y-3 max-h-[700px] overflow-y-auto">
+          <div className="p-6 space-y-3 max-h-175 overflow-y-auto">
             {tournament.matches.length === 0 ? (
               <p className="text-slate-500 italic">Nessuna partita generata.</p>
             ) : (
