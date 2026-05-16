@@ -1,8 +1,14 @@
-import { generateTournamentMatches } from "@/app/actions"
-import Link from "next/link"
-import prisma from "@/lib/prisma"
+import { generateTournamentMatches } from "@/app/actions";
+import Link from "next/link";
+import prisma from "@/lib/prisma";
 
-export default async function TournamentDetail({ params }: { params: Promise<{ id: string }> }) {
+export const dynamic = "force-dynamic";
+
+export default async function TournamentDetail({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = await params;
   const tournament = await prisma.tournament.findUnique({
     where: { id },
@@ -10,9 +16,9 @@ export default async function TournamentDetail({ params }: { params: Promise<{ i
       teams: true,
       matches: {
         include: { homeTeam: true, awayTeam: true },
-        orderBy: { matchDate: "asc" }
-      }
-    }
+        orderBy: { matchDate: "asc" },
+      },
+    },
   });
 
   if (!tournament) return <div>Torneo non trovato</div>;
@@ -21,29 +27,45 @@ export default async function TournamentDetail({ params }: { params: Promise<{ i
     <div className="max-w-5xl mx-auto space-y-8">
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-800">{tournament.name}</h1>
-          <p className="text-slate-500 mt-2">{tournament.sport} • {tournament.format}</p>
+          <h1 className="text-3xl font-extrabold text-slate-800">
+            {tournament.name}
+          </h1>
+          <p className="text-slate-500 mt-2">
+            {tournament.sport} • {tournament.format}
+          </p>
         </div>
-        <span className={`px-4 py-1.5 rounded-full text-sm font-semibold ${tournament.status === 'DRAFT' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
-          {tournament.status === 'DRAFT' ? 'In Preparazione' : 'In Corso'}
+        <span
+          className={`px-4 py-1.5 rounded-full text-sm font-semibold ${tournament.status === "DRAFT" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}
+        >
+          {tournament.status === "DRAFT" ? "In Preparazione" : "In Corso"}
         </span>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-slate-800">Squadre ({tournament.teams.length})</h2>
-            <Link href="/admin/teams/new" className="text-sm text-indigo-600 font-medium hover:underline">+ Aggiungi</Link>
+            <h2 className="text-xl font-bold text-slate-800">
+              Squadre ({tournament.teams.length})
+            </h2>
+            <Link
+              href="/admin/teams/new"
+              className="text-sm text-indigo-600 font-medium hover:underline"
+            >
+              + Aggiungi
+            </Link>
           </div>
-          
+
           {tournament.teams.length === 0 ? (
             <p className="text-slate-500 italic">Nessuna squadra iscritta.</p>
           ) : (
             <ul className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
               {tournament.teams.map((t: any) => (
-                <li key={t.id} className="p-3 bg-slate-50 rounded-lg border border-slate-100 font-medium text-slate-700 flex items-center gap-3 shadow-sm">
+                <li
+                  key={t.id}
+                  className="p-3 bg-slate-50 rounded-lg border border-slate-100 font-medium text-slate-700 flex items-center gap-3 shadow-sm"
+                >
                   <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs">
-                    {t.name.substring(0,2).toUpperCase()}
+                    {t.name.substring(0, 2).toUpperCase()}
                   </div>
                   {t.name}
                 </li>
@@ -56,18 +78,32 @@ export default async function TournamentDetail({ params }: { params: Promise<{ i
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-slate-800">Calendario</h2>
             {tournament.matches.length > 0 && (
-              <Link href="/admin/matches" className="text-sm text-indigo-600 font-medium hover:underline">Inserisci Risultati →</Link>
+              <Link
+                href="/admin/matches"
+                className="text-sm text-indigo-600 font-medium hover:underline"
+              >
+                Inserisci Risultati →
+              </Link>
             )}
           </div>
-          
+
           {tournament.matches.length === 0 ? (
             <div className="text-center py-10 flex-grow flex flex-col justify-center">
               <div className="text-5xl mb-4">📅</div>
-              <p className="text-slate-500 mb-6">Il calendario non è ancora stato generato.</p>
+              <p className="text-slate-500 mb-6">
+                Il calendario non è ancora stato generato.
+              </p>
               {tournament.teams.length >= 2 ? (
                 <form action={generateTournamentMatches}>
-                  <input type="hidden" name="tournamentId" value={tournament.id} />
-                  <button type="submit" className="bg-gradient-to-r from-indigo-600 to-blue-500 hover:from-indigo-700 hover:to-blue-600 text-white px-6 py-3 rounded-lg font-bold shadow-md transition w-full hover:scale-[1.02]">
+                  <input
+                    type="hidden"
+                    name="tournamentId"
+                    value={tournament.id}
+                  />
+                  <button
+                    type="submit"
+                    className="bg-gradient-to-r from-indigo-600 to-blue-500 hover:from-indigo-700 hover:to-blue-600 text-white px-6 py-3 rounded-lg font-bold shadow-md transition w-full hover:scale-[1.02]"
+                  >
                     Genera Calendario Automagico
                   </button>
                 </form>
@@ -80,12 +116,29 @@ export default async function TournamentDetail({ params }: { params: Promise<{ i
           ) : (
             <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 flex-grow">
               {tournament.matches.map((m: any) => (
-                <div key={m.id} className="flex justify-between items-center p-3 border border-slate-200 rounded-lg bg-white shadow-sm hover:border-indigo-300 transition">
-                  <div className="text-sm font-bold text-slate-700 w-1/3 text-right truncate" title={m.homeTeam?.name}>{m.homeTeam?.name}</div>
-                  <div className={`px-3 py-1 rounded text-center min-w-[70px] font-black tracking-wider text-sm mx-2 ${m.status === 'FINISHED' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500'}`}>
-                    {m.status === 'FINISHED' ? `${m.homeScore} - ${m.awayScore}` : 'VS'}
+                <div
+                  key={m.id}
+                  className="flex justify-between items-center p-3 border border-slate-200 rounded-lg bg-white shadow-sm hover:border-indigo-300 transition"
+                >
+                  <div
+                    className="text-sm font-bold text-slate-700 w-1/3 text-right truncate"
+                    title={m.homeTeam?.name}
+                  >
+                    {m.homeTeam?.name}
                   </div>
-                  <div className="text-sm font-bold text-slate-700 w-1/3 text-left truncate" title={m.awayTeam?.name}>{m.awayTeam?.name}</div>
+                  <div
+                    className={`px-3 py-1 rounded text-center min-w-[70px] font-black tracking-wider text-sm mx-2 ${m.status === "FINISHED" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-500"}`}
+                  >
+                    {m.status === "FINISHED"
+                      ? `${m.homeScore} - ${m.awayScore}`
+                      : "VS"}
+                  </div>
+                  <div
+                    className="text-sm font-bold text-slate-700 w-1/3 text-left truncate"
+                    title={m.awayTeam?.name}
+                  >
+                    {m.awayTeam?.name}
+                  </div>
                 </div>
               ))}
             </div>
@@ -93,5 +146,5 @@ export default async function TournamentDetail({ params }: { params: Promise<{ i
         </div>
       </div>
     </div>
-  )
+  );
 }

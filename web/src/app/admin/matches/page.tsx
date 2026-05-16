@@ -1,41 +1,53 @@
-import MatchForm from "./MatchForm"
-import prisma from "@/lib/prisma"
-import Link from "next/link"
+import MatchForm from "./MatchForm";
+import prisma from "@/lib/prisma";
+import Link from "next/link";
+
+export const dynamic = "force-dynamic";
 
 export default async function AdminMatchesPage() {
   const tournaments = await prisma.tournament.findMany({
-    where: { status: { in: ['ONGOING', 'COMPLETED'] } },
+    where: { status: { in: ["ONGOING", "COMPLETED"] } },
     include: {
       matches: {
         include: { homeTeam: true, awayTeam: true },
-        orderBy: { matchDate: "asc" }
-      }
-    }
+        orderBy: { matchDate: "asc" },
+      },
+    },
   });
 
   if (tournaments.length === 0) {
     return (
       <div className="max-w-4xl mx-auto text-center py-12">
         <div className="text-5xl mb-4">⚽</div>
-        <h2 className="text-2xl font-bold text-slate-800 mb-2">Nessun torneo in corso</h2>
-        <p className="text-slate-500">Per inserire i risultati, devi prima generare il calendario di un torneo dalla sua pagina di dettaglio.</p>
+        <h2 className="text-2xl font-bold text-slate-800 mb-2">
+          Nessun torneo in corso
+        </h2>
+        <p className="text-slate-500">
+          Per inserire i risultati, devi prima generare il calendario di un
+          torneo dalla sua pagina di dettaglio.
+        </p>
       </div>
-    )
+    );
   }
 
   return (
     <div className="max-w-4xl mx-auto space-y-12">
       <div>
-        <h1 className="text-3xl font-extrabold text-slate-800 mb-2">Risultati Partite</h1>
+        <h1 className="text-3xl font-extrabold text-slate-800 mb-2">
+          Risultati Partite
+        </h1>
         <p className="text-slate-500">
-          Inserisci i risultati manualmente, o usa il{' '}
-          <span className="font-semibold text-indigo-600">segnapunti live</span>{' '}
+          Inserisci i risultati manualmente, o usa il{" "}
+          <span className="font-semibold text-indigo-600">segnapunti live</span>{" "}
           (▶) per registrare punto per punto direttamente dal telefono.
         </p>
       </div>
 
-      {tournaments.map(tournament => (
-        <div key={tournament.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      {tournaments.map((tournament) => (
+        <div
+          key={tournament.id}
+          className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
+        >
           <div className="bg-slate-900 px-6 py-4 flex justify-between items-center">
             <h2 className="text-xl font-bold text-white">{tournament.name}</h2>
             <span className="text-xs font-semibold bg-indigo-500/30 text-indigo-100 px-3 py-1 rounded-full">
@@ -51,16 +63,16 @@ export default async function AdminMatchesPage() {
                 <div key={m.id} className="space-y-2">
                   {/* Live Scorer button */}
                   <div className="flex items-center justify-end gap-2 mb-1">
-                    {m.status !== 'FINISHED' && (
+                    {m.status !== "FINISHED" && (
                       <Link
                         href={`/admin/matches/${m.id}/live`}
                         className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition shadow-sm ${
-                          m.status === 'LIVE'
-                            ? 'bg-red-100 text-red-700 hover:bg-red-200 ring-1 ring-red-300'
-                            : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                          m.status === "LIVE"
+                            ? "bg-red-100 text-red-700 hover:bg-red-200 ring-1 ring-red-300"
+                            : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
                         }`}
                       >
-                        {m.status === 'LIVE' ? (
+                        {m.status === "LIVE" ? (
                           <>
                             <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping inline-block" />
                             Segnapunti Live →
@@ -70,7 +82,7 @@ export default async function AdminMatchesPage() {
                         )}
                       </Link>
                     )}
-                    {m.status === 'FINISHED' && (
+                    {m.status === "FINISHED" && (
                       <Link
                         href={`/admin/matches/${m.id}/live`}
                         className="text-xs text-slate-400 hover:text-slate-600 transition"
@@ -88,5 +100,5 @@ export default async function AdminMatchesPage() {
         </div>
       ))}
     </div>
-  )
+  );
 }

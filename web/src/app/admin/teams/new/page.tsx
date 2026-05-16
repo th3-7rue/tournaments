@@ -1,15 +1,19 @@
-import prisma from "@/lib/prisma"
-import NewTeamForm from "./NewTeamForm"
+import prisma from "@/lib/prisma";
+import NewTeamForm from "./NewTeamForm";
+
+export const dynamic = "force-dynamic";
 
 export default async function NewTeamPage() {
   const tournaments = await prisma.tournament.findMany({
-    select: { id: true, name: true }
-  })
+    select: { id: true, name: true },
+  });
 
   return (
     <div className="max-w-xl mx-auto">
-      <h2 className="text-2xl font-bold text-slate-800 mb-6">Aggiungi Nuova Squadra</h2>
+      <h2 className="text-2xl font-bold text-slate-800 mb-6">
+        Aggiungi Nuova Squadra
+      </h2>
       <NewTeamForm tournaments={tournaments} />
     </div>
-  )
+  );
 }
