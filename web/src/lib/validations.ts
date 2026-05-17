@@ -20,6 +20,12 @@ export const CreateTournamentSchema = z.object({
 export const CreateTeamSchema = z.object({
   name: z.string().min(1, "Il nome della squadra è obbligatorio").max(50),
   tournamentId: z.string().uuid(),
+  groupId: z.string().uuid().optional(),
+});
+
+export const CreateGroupSchema = z.object({
+  name: z.string().min(1, "Il nome del girone è obbligatorio").max(50),
+  tournamentId: z.string().uuid(),
 });
 
 export const SetScoreSchema = z.object({

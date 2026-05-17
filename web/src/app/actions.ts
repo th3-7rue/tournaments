@@ -10,6 +10,7 @@ import { isVolleyballSport } from "@/lib/sports";
 import {
   CreateTournamentSchema,
   CreateTeamSchema,
+  CreateGroupSchema,
   UpdateScoreSchema,
 } from "@/lib/validations";
 
@@ -66,12 +67,28 @@ export async function createTeam(
   const rawData = {
     name: formData.get("name"),
     tournamentId: formData.get("tournamentId"),
+    groupId: formData.get("groupId") || null,
   };
 
-  const validated = CreateTeamSchema.safeParse(rawData);
+  const validated = CreateTeamSchema.safeParse({
+    name: rawData.name,
+    tournamentId: rawData.tournamentId,
+  });
   if (!validated.success) {
     return {
       error: validated.error.issues.map((e: any) => e.message).join(", "),
+    };
+  }
+
+  // Block adding teams to non-DRAFT tournaments
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: validated.data.tournamentId },
+    select: { status: true },
+  });
+  if (!tournament) return { error: "Torneo non trovato" };
+  if (tournament.status !== "DRAFT") {
+    return {
+      error: `Impossibile aggiungere squadre a un torneo ${tournament.status === "ONGOING" ? "in corso" : "completato"}. Devi prima sbloccare il torneo.`,
     };
   }
 
@@ -79,11 +96,66 @@ export async function createTeam(
     data: {
       name: validated.data.name,
       tournamentId: validated.data.tournamentId,
+      groupId: (rawData.groupId as string) || null,
     },
   });
 
   revalidatePath("/admin/teams");
   redirect("/admin/teams");
+}
+
+export async function deleteTeam(teamId: string): Promise<void> {
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    include: { tournament: true },
+  });
+  if (!team) throw new Error("Squadra non trovata");
+
+  // Delete matches involving this team
+  await prisma.match.deleteMany({
+    where: {
+      OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }],
+    },
+  });
+
+  // Delete standing
+  await prisma.standing.deleteMany({
+    where: { teamId },
+  });
+
+  await prisma.team.delete({ where: { id: teamId } });
+
+  revalidatePath("/admin/teams");
+  if (team.tournament) {
+    revalidatePath(`/admin/tournaments/${team.tournamentId}`);
+  }
+}
+
+export async function createGroup(
+  prevState: any,
+  formData: FormData,
+): Promise<{ error?: string } | undefined> {
+  const rawData = {
+    name: formData.get("name"),
+    tournamentId: formData.get("tournamentId"),
+  };
+
+  const validated = CreateGroupSchema.safeParse(rawData);
+  if (!validated.success) {
+    return {
+      error: validated.error.issues.map((e: any) => e.message).join(", "),
+    };
+  }
+
+  await prisma.group.create({
+    data: {
+      name: validated.data.name,
+      tournamentId: validated.data.tournamentId,
+    },
+  });
+
+  revalidatePath(`/admin/tournaments/${validated.data.tournamentId}`);
+  redirect(`/admin/tournaments/${validated.data.tournamentId}`);
 }
 
 export async function generateTournamentMatches(
@@ -97,6 +169,8 @@ export async function generateTournamentMatches(
   });
 
   if (!tournament) throw new Error("Torneo non trovato");
+  if (tournament.status !== "DRAFT")
+    throw new Error("Il calendario può essere generato solo per un torneo in fase di preparazione.");
   if (tournament.teams.length < 2)
     throw new Error("Servono almeno 2 squadre per generare il calendario");
   if (tournament.matches.length > 0)
@@ -379,6 +453,273 @@ export async function startMatch(matchId: string): Promise<void> {
   });
   revalidatePath("/admin/matches");
   revalidatePath("/");
+}
+
+export async function deleteMatch(matchId: string): Promise<{ error?: string }> {
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: {
+      tournamentId: true,
+      status: true,
+      homeTeamId: true,
+      awayTeamId: true,
+      nextMatchId: true,
+      nextLoserMatchId: true,
+    },
+  });
+  if (!match) return { error: "Partita non trovata" };
+
+  if (match.status === "FINISHED") {
+    // Invalidate downstream bracket links
+    if (match.nextMatchId) {
+      await prisma.match.updateMany({
+        where: { id: match.nextMatchId },
+        data: { homeTeamId: null, awayTeamId: null },
+      });
+    }
+    if (match.nextLoserMatchId) {
+      await prisma.match.updateMany({
+        where: { id: match.nextLoserMatchId },
+        data: { homeTeamId: null, awayTeamId: null },
+      });
+    }
+  }
+
+  await prisma.match.delete({ where: { id: matchId } });
+
+  revalidatePath(`/admin/matches`);
+  revalidatePath(`/admin/tournaments/${match.tournamentId}`);
+  return {};
+}
+
+export async function updateTournament(
+  prevState: any,
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const rawData = {
+    tournamentId: formData.get("tournamentId"),
+    name: formData.get("name"),
+    startDate: formData.get("startDate"),
+    endDate: formData.get("endDate"),
+  };
+
+  if (!rawData.tournamentId || !rawData.name) {
+    return { error: "Campi obbligatori mancanti" };
+  }
+
+  const tournamentId = rawData.tournamentId as string;
+  const name = rawData.name as string;
+
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+  });
+  if (!tournament) return { error: "Torneo non trovato" };
+
+  // Check if tournament is locked (schedule generated or matches exist)
+  if (tournament.status === "ONGOING") {
+    return { error: "Non puoi modificare un torneo già avviato. Devi prima sbloccarlo." };
+  }
+
+  await prisma.tournament.update({
+    where: { id: tournamentId },
+    data: {
+      name: name,
+      startDate: rawData.startDate ? new Date(rawData.startDate as string) : null,
+      endDate: rawData.endDate ? new Date(rawData.endDate as string) : null,
+    },
+  });
+
+  revalidatePath(`/admin/tournaments/${tournamentId}`);
+  redirect(`/admin/tournaments/${tournamentId}`);
+}
+
+export async function lockTournament(tournamentId: string): Promise<{ error?: string }> {
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    include: { teams: true, matches: true },
+  });
+  if (!tournament) return { error: "Torneo non trovato" };
+
+  if (tournament.matches.length > 0) {
+    return { error: "Questo torneo ha già un calendario generato. Non è più modificabile." };
+  }
+
+  await prisma.tournament.update({
+    where: { id: tournamentId },
+    data: { status: "ONGOING" },
+  });
+
+  revalidatePath(`/admin/tournaments/${tournamentId}`);
+  redirect(`/admin/tournaments/${tournamentId}`);
+}
+
+export async function unlockTournament(tournamentId: string): Promise<void> {
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    include: { matches: true },
+  });
+  if (!tournament) throw new Error("Torneo non trovato");
+
+  if (tournament.status === "COMPLETED") {
+    throw new Error("Non puoi sbloccare un torneo completato.");
+  }
+
+  // Clear all generated matches, standings and groups
+  if (tournament.matches.length > 0) {
+    await prisma.match.deleteMany({
+      where: { tournamentId },
+    });
+    await prisma.standing.deleteMany({
+      where: { tournamentId },
+    });
+    await prisma.group.deleteMany({
+      where: { tournamentId },
+    });
+  }
+
+  await prisma.tournament.update({
+    where: { id: tournamentId },
+    data: { status: "DRAFT" },
+  });
+
+  revalidatePath(`/admin/tournaments/${tournamentId}`);
+  redirect(`/admin/tournaments/${tournamentId}`);
+}
+
+export async function deleteGroup(
+  prevState: any,
+  formData: FormData,
+): Promise<{ error?: string } | undefined> {
+  const groupId = formData.get("groupId") as string;
+  const tournamentId = formData.get("tournamentId") as string;
+
+  if (!groupId || !tournamentId) {
+    return { error: "ID mancanti" };
+  }
+
+  const group = await prisma.group.findUnique({
+    where: { id: groupId },
+    include: { tournament: true },
+  });
+  if (!group) return { error: "Girone non trovato" };
+
+  // Delete all teams in this group (cascade will delete their matches and standings)
+  const teamsInGroup = await prisma.team.findMany({
+    where: { groupId },
+  });
+  for (const team of teamsInGroup) {
+    await prisma.team.delete({ where: { id: team.id } });
+  }
+
+  // Delete the group
+  await prisma.group.delete({ where: { id: groupId } });
+
+  revalidatePath(`/admin/tournaments/${tournamentId}`);
+  revalidatePath(`/admin/tournaments/${tournamentId}/groups`);
+  redirect(`/admin/tournaments/${tournamentId}`);
+}
+
+export async function assignTeamToGroup(
+  prevState: any,
+  formData: FormData,
+): Promise<{ error?: string } | undefined> {
+  const teamId = formData.get("teamId") as string;
+  const groupId = formData.get("groupId") as string;
+  const tournamentId = formData.get("tournamentId") as string;
+
+  if (!teamId || !groupId || !tournamentId) {
+    return { error: "ID mancanti" };
+  }
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    include: { tournament: true },
+  });
+  if (!team) return { error: "Squadra non trovata" };
+
+  // Check if team already belongs to this group
+  if (team.groupId === groupId) {
+    return { error: "Questa squadra è già in questo girone" };
+  }
+
+  const group = await prisma.group.findUnique({
+    where: { id: groupId },
+    include: { tournament: true },
+  });
+  if (!group || group.tournamentId !== tournamentId) {
+    return { error: "Girone non trovato o non appartiene a questo torneo" };
+  }
+
+  // Check if team is already in another group
+  if (team.groupId) {
+    await prisma.team.update({
+      where: { id: teamId },
+      data: { groupId: null },
+    });
+  }
+
+  await prisma.team.update({
+    where: { id: teamId },
+    data: { groupId },
+  });
+
+  revalidatePath(`/admin/tournaments/${tournamentId}`);
+  revalidatePath(`/admin/tournaments/${tournamentId}/groups`);
+  redirect(`/admin/tournaments/${tournamentId}`);
+}
+
+export async function deleteTeamFromGroup(
+  prevState: any,
+  formData: FormData,
+): Promise<{ error?: string } | undefined> {
+  const teamId = formData.get("teamId") as string;
+  const tournamentId = formData.get("tournamentId") as string;
+
+  if (!teamId || !tournamentId) {
+    return { error: "ID mancanti" };
+  }
+
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    include: { tournament: true },
+  });
+  if (!team) return { error: "Squadra non trovata" };
+
+  if (team.tournamentId !== tournamentId) {
+    return { error: "Squadra non appartiene a questo torneo" };
+  }
+
+  // Remove from group (set to null)
+  await prisma.team.update({
+    where: { id: teamId },
+    data: { groupId: null },
+  });
+
+  revalidatePath(`/admin/tournaments/${tournamentId}`);
+  revalidatePath(`/admin/tournaments/${tournamentId}/groups`);
+  redirect(`/admin/tournaments/${tournamentId}`);
+}
+
+export async function checkAndCompleteTournament(tournamentId: string): Promise<void> {
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+    include: { matches: true },
+  });
+  if (!tournament) return;
+
+  if (tournament.status === "COMPLETED") return;
+
+  const allFinished = tournament.matches.length > 0 && tournament.matches.every(m => m.status === "FINISHED");
+
+  if (allFinished) {
+    await prisma.tournament.update({
+      where: { id: tournamentId },
+      data: { status: "COMPLETED" },
+    });
+  }
+
+  revalidatePath(`/admin/tournaments/${tournamentId}`);
+  revalidatePath(`/`);
 }
 
 export async function recalculateStandings(

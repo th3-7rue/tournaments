@@ -1,4 +1,4 @@
-import { generateTournamentMatches } from "@/app/actions";
+import { generateTournamentMatches, unlockTournament } from "@/app/actions";
 import Link from "next/link";
 import prisma from "@/lib/prisma";
 import { SPORT_DISPLAY_NAMES } from "@/lib/sports";
@@ -20,6 +20,14 @@ export default async function TournamentDetail({
     where: { id },
     include: {
       teams: true,
+      groups: {
+        include: {
+          teams: {
+            select: { id: true, name: true },
+          },
+        },
+        orderBy: { name: "asc" },
+      },
       matches: {
         include: { homeTeam: true, awayTeam: true },
         orderBy: { matchDate: "asc" },
@@ -40,7 +48,7 @@ export default async function TournamentDetail({
             {SPORT_DISPLAY_NAMES[
               tournament.sport as keyof typeof SPORT_DISPLAY_NAMES
             ] ?? tournament.sport}{" "}
-            • {tournament.format}
+            • {tournament.format.replace("_", " ")}
           </p>
         </div>
         <span
@@ -50,18 +58,55 @@ export default async function TournamentDetail({
         </span>
       </div>
 
+      <div className="flex items-center gap-4">
+        {tournament.status === "DRAFT" && tournament.groups.length > 0 && (
+          <Link
+            href={`/admin/tournaments/${id}/groups`}
+            className="text-sm text-indigo-600 font-medium hover:underline flex items-center gap-2"
+          >
+            📋 Gestione Gironi →
+          </Link>
+        )}
+      </div>
+
+      {/* Groups Summary */}
+      {tournament.groups.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {tournament.groups.map((group) => (
+            <div
+              key={group.id}
+              className="bg-white p-4 rounded-xl shadow-sm border border-slate-100"
+            >
+              <div className="font-bold text-slate-800 text-lg mb-1">
+                {group.name}
+              </div>
+              <div className="text-sm text-slate-500">
+                {group.teams.length} squadra{group.teams.length !== 1 ? "e" : ""}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-slate-800">
               Squadre ({tournament.teams.length})
             </h2>
-            <Link
-              href="/admin/teams/new"
-              className="text-sm text-indigo-600 font-medium hover:underline"
-            >
-              + Aggiungi
-            </Link>
+            {tournament.status === "DRAFT" && (
+              <Link
+                href="/admin/teams/new"
+                className="text-sm text-indigo-600 font-medium hover:underline"
+              >
+                + Aggiungi
+              </Link>
+            )}
+            {tournament.status !== "DRAFT" && (
+              <span className="text-xs text-slate-400 italic">
+                {tournament.status === "ONGOING" ? "Aggiunta squadre non disponibile" : "Torneo completato"}
+              </span>
+            )}
           </div>
 
           {tournament.teams.length === 0 ? (
@@ -95,6 +140,16 @@ export default async function TournamentDetail({
                 Inserisci Risultati →
               </Link>
               )}
+              {tournament.status === "ONGOING" && tournament.matches.length === 0 && (
+                <form action={unlockTournament.bind(null, tournament.id)}>
+                  <button
+                    type="submit"
+                    className="text-sm text-amber-600 font-medium hover:underline"
+                  >
+                    Sblocca Torneo
+                  </button>
+                </form>
+              )}
               <DeleteTournamentButton tournamentId={tournament.id} />
             </div>
           </div>
@@ -105,7 +160,20 @@ export default async function TournamentDetail({
               <p className="text-slate-500 mb-6">
                 Il calendario non è ancora stato generato.
               </p>
-              {tournament.teams.length >= 2 ? (
+              {tournament.status !== "DRAFT" ? (
+                <p className="text-slate-400 text-sm">
+                  Il torneo non è più in fase di preparazione.{" "}
+                  <form action={unlockTournament.bind(null, tournament.id)} className="inline">
+                    <button
+                      type="submit"
+                      className="text-amber-600 font-medium hover:underline"
+                    >
+                      Sblocca
+                    </button>
+                  </form>{" "}
+                  per tornare a modificarlo.
+                </p>
+              ) : tournament.teams.length >= 2 ? (
                 <form action={generateTournamentMatches}>
                   <input
                     type="hidden"

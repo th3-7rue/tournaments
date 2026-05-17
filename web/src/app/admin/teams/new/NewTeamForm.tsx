@@ -1,10 +1,11 @@
 "use client"
 
 import { createTeam } from "@/app/actions"
-import { useActionState, useEffect } from "react"
+import { useActionState, useEffect, useState } from "react"
 import { useFormStatus } from "react-dom"
 import { toast } from "sonner"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 
 function SubmitButton({ disabled }: { disabled?: boolean }) {
   const { pending } = useFormStatus()
@@ -28,8 +29,21 @@ function SubmitButton({ disabled }: { disabled?: boolean }) {
   )
 }
 
-export default function NewTeamForm({ tournaments }: { tournaments: { id: string; name: string }[] }) {
+interface Group {
+  id: string;
+  name: string;
+}
+
+export default function NewTeamForm({ 
+  tournaments, 
+  groups 
+}: { 
+  tournaments: { id: string; name: string }[];
+  groups?: Group[]
+}) {
+  const searchParams = useSearchParams()
   const [state, formAction] = useActionState(createTeam, undefined)
+  const [selectedGroup, setSelectedGroup] = useState<string>(searchParams.get("group") || "")
 
   useEffect(() => {
     if (state?.error) {
@@ -84,6 +98,25 @@ export default function NewTeamForm({ tournaments }: { tournaments: { id: string
           </div>
         )}
       </div>
+
+      {groups && groups.length > 0 && (
+        <div>
+          <label htmlFor="team-group" className="block text-sm font-semibold text-slate-700 mb-2">
+            Seleziona Girone (opzionale)
+          </label>
+          <select
+            id="team-group"
+            name="groupId"
+            defaultValue={selectedGroup}
+            className="w-full border border-slate-200 p-3 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          >
+            <option value="">-- Nessun Girone --</option>
+            {groups.map(g => (
+              <option key={g.id} value={g.id}>{g.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div className="pt-6 border-t mt-4">
         <SubmitButton disabled={tournaments.length === 0} />
