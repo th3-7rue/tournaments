@@ -491,6 +491,52 @@ export async function updateMatchScore(formData: FormData): Promise<void> {
     });
   }
 
+  // Fetch current match data to save history
+  let currentMatch;
+  try {
+    currentMatch = await prisma.match.findUnique({
+      where: { id: data.matchId },
+    });
+  } catch (e: any) {
+    console.error("Error fetching match for history:", e);
+  }
+
+  // Save history entry with previous values (best effort)
+  if (currentMatch) {
+    try {
+      // Check if MatchHistory model exists in Prisma client
+      if (typeof (prisma as any).matchHistory !== 'undefined') {
+        await prisma.matchHistory.create({
+          data: {
+            id: `history_${currentMatch.id}_${Date.now()}`,
+            matchId: data.matchId,
+            tournamentId: currentMatch.tournamentId,
+            homeTeamId: currentMatch.homeTeamId,
+            awayTeamId: currentMatch.awayTeamId,
+            homeScore: currentMatch.homeScore ?? null,
+            awayScore: currentMatch.awayScore ?? null,
+            setScores: currentMatch.setScores ?? ({} as any),
+            status: currentMatch.status ?? null,
+            stage: currentMatch.stage ?? null,
+            previousHomeScore: homeScore,
+            previousAwayScore: awayScore,
+            previousSetScores: setScoresJson ?? ({} as any),
+            editedBy: "admin",
+            editedByUsername: "admin",
+          },
+        });
+      } else {
+        console.log("MatchHistory model not available in Prisma client - skipping history save");
+      }
+    } catch (e: any) {
+      if (e.message?.includes("relation") || e.message?.includes("table")) {
+        console.log("MatchHistory table not found - skipping history save. Run: npx prisma generate && npx prisma db push");
+      } else {
+        console.error("Error saving match history:", e);
+      }
+    }
+  }
+
   const match = await (prisma.match as any).update({
     where: { id: data.matchId },
     data: {
@@ -1105,5 +1151,74 @@ export async function recalculateStandings(
         pointsDifference: s.pointsDifference,
       },
     });
+  }
+}
+
+/**
+ * Reverts a match to its previous state from history
+ */
+export async function undoMatchScore(matchId: string): Promise<{
+  success: boolean;
+  previousHomeScore: number | null;
+  previousAwayScore: number | null;
+  previousSetScores: any[] | null;
+  previousStatus: string | null;
+  previousStage: string | null;
+  error?: string;
+}> {
+  try {
+    // Check if MatchHistory model exists in Prisma client
+    if (typeof (prisma as any).matchHistory === 'undefined') {
+      return { success: false, previousHomeScore: null, previousAwayScore: null, previousSetScores: null, previousStatus: null, previousStage: null, error: "MatchHistory non disponibile" };
+    }
+
+    // Find the most recent history entry
+    const history = await prisma.matchHistory.findFirst({
+      where: { matchId },
+      orderBy: { editedAt: "desc" },
+      select: {
+        id: true,
+        previousHomeScore: true,
+        previousAwayScore: true,
+        previousSetScores: true,
+        previousStatus: true,
+        previousStage: true,
+      },
+    });
+
+    if (!history) {
+      return { success: false, previousHomeScore: null, previousAwayScore: null, previousSetScores: null, previousStatus: null, previousStage: null, error: "Nessuna storia disponibile" };
+    }
+
+    // Revert match to previous state
+    await prisma.match.update({
+      where: { id: matchId },
+      data: {
+        homeScore: history.previousHomeScore,
+        awayScore: history.previousAwayScore,
+        setScores: history.previousSetScores ?? ({} as any),
+        status: (history.previousStatus ?? "SCHEDULED") as any,
+        stage: (history.previousStage ?? "GROUP_STAGE") as any,
+      },
+    });
+
+    // Update standings
+    await updateStandings(matchId);
+
+    // Remove the reverted history entry
+    await prisma.matchHistory.delete({
+      where: { id: history.id },
+    });
+
+    return {
+      success: true,
+      previousHomeScore: history.previousHomeScore,
+      previousAwayScore: history.previousAwayScore,
+      previousSetScores: Array.isArray(history.previousSetScores) ? history.previousSetScores : null,
+      previousStatus: history.previousStatus,
+      previousStage: history.previousStage,
+    };
+  } catch (error: any) {
+    return { success: false, previousHomeScore: null, previousAwayScore: null, previousSetScores: null, previousStatus: null, previousStage: null, error: error.message };
   }
 }

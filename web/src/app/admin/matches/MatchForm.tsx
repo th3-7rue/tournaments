@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { updateMatchScore } from "@/app/actions";
+import { undoMatchScore } from "@/app/undo-match-score";
 import { isVolleyballSport } from "@/lib/sports";
 import { toast } from "sonner";
 
@@ -160,45 +161,67 @@ export default function MatchForm({
         </div>
       </div>
 
-      <button
-        type="submit"
-        disabled={isPending}
-        className={`px-6 py-2.5 rounded-lg font-bold shadow-sm transition w-full md:w-auto mt-4 md:mt-0 flex items-center justify-center gap-2 min-w-22.5 ${
-          match.status === "FINISHED"
-            ? "bg-slate-200 text-slate-600 hover:bg-slate-300"
-            : "bg-indigo-600 text-white hover:bg-indigo-700"
-        } disabled:opacity-60 disabled:cursor-not-allowed`}
-      >
-        {isPending ? (
-          <>
-            <svg
-              className="animate-spin w-4 h-4"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-              />
-            </svg>
-            <span className="hidden sm:inline">Salvataggio...</span>
-          </>
-        ) : match.status === "FINISHED" ? (
-          "Aggiorna"
-        ) : (
-          "Salva"
-        )}
-      </button>
+      <div className="flex gap-2 w-full md:w-auto mt-4 md:mt-0">
+        <button
+          type="submit"
+          disabled={isPending}
+          className={`px-6 py-2.5 rounded-lg font-bold shadow-sm transition flex items-center justify-center gap-2 min-w-22.5 ${
+            match.status === "FINISHED"
+              ? "bg-slate-200 text-slate-600 hover:bg-slate-300"
+              : "bg-indigo-600 text-white hover:bg-indigo-700"
+          } disabled:opacity-60 disabled:cursor-not-allowed`}
+        >
+          {isPending ? (
+            <>
+              <svg
+                className="animate-spin w-4 h-4"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+              <span className="hidden sm:inline">Salvataggio...</span>
+            </>
+          ) : match.status === "FINISHED" ? (
+            "Aggiorna"
+          ) : (
+            "Salva"
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={async () => {
+            const result = await undoMatchScore(match.id);
+            if (result.success) {
+              toast.success("Annullamento riuscito!", {
+                description: `Restaurato a: ${result.previousHomeScore || 0}-${result.previousAwayScore || 0}`,
+              });
+              window.location.reload();
+            } else {
+              toast.error("Annullamento fallito", {
+                description: result.error || "Riprova più tardi.",
+              });
+            }
+          }}
+          className="px-4 py-2.5 rounded-lg font-bold bg-amber-500 text-white hover:bg-amber-600 transition flex items-center justify-center gap-2 min-w-[3rem]"
+        >
+          ↩️
+        </button>
+      </div>
     </form>
   );
 }

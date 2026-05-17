@@ -16,11 +16,11 @@ services:
       context: ./web
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "8085:3000"
     environment:
       - DATABASE_URL=postgresql://admin:password123@db:5432/tournament_db?schema=public
       - NEXTAUTH_SECRET=supersecret123
-      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_URL=http://localhost:8085
     depends_on:
       - db
     restart: unless-stopped

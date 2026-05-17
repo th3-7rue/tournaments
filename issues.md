@@ -18,7 +18,10 @@
          - Football standard scoring (3 pts win, 1 pt draw)
          - Teams without matches (kept at 0)
 
-     6. No undo: Once a match is FINISHED, the admin can edit it (✎ Modifica link), but there's no undo if they made a mistake.
+     6. ✅ RESOLVED: Undo functionality implemented via match edit history. Admins can now:
+         - View match edit history at `/admin/matches/[matchId]/history`
+         - Revert to previous match state using the ↩️ undo button on the edit page
+         - History tracks all match edits with timestamps and previous/next values
 
      7. Double Elimination complexity: The generation handles nextMatchId and nextLoserMatchId, but I should check whether the losers' bracket actually gets populated correctly.
 
