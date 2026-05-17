@@ -2,6 +2,11 @@ import { generateTournamentMatches } from "@/app/actions";
 import Link from "next/link";
 import prisma from "@/lib/prisma";
 import { SPORT_DISPLAY_NAMES } from "@/lib/sports";
+import { default as dynamicImport } from "next/dynamic";
+
+const DeleteTournamentButton = dynamicImport(
+  () => import("@/components/DeleteTournamentButton"),
+);
 
 export const dynamic = "force-dynamic";
 
@@ -81,14 +86,17 @@ export default async function TournamentDetail({
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col h-full">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-slate-800">Calendario</h2>
-            {tournament.matches.length > 0 && (
+            <div className="flex items-center gap-3">
+              {tournament.matches.length > 0 && (
               <Link
                 href="/admin/matches"
                 className="text-sm text-indigo-600 font-medium hover:underline"
               >
                 Inserisci Risultati →
               </Link>
-            )}
+              )}
+              <DeleteTournamentButton tournamentId={tournament.id} />
+            </div>
           </div>
 
           {tournament.matches.length === 0 ? (

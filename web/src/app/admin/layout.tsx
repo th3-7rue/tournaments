@@ -1,4 +1,5 @@
 import { getServerSession } from "next-auth/next"
+import SignOutButton from "@/components/SignOutButton"
 
 export default async function AdminLayout({
   children,
@@ -22,12 +23,12 @@ export default async function AdminLayout({
               </div>
             )}
           </div>
-          {session && (
-            <div className="flex gap-4 items-center">
-              <span className="text-slate-300 text-sm hidden sm:inline">👤 {session.user?.name}</span>
-              <a href="/api/auth/signout" className="text-sm bg-red-600/90 px-4 py-1.5 rounded-md hover:bg-red-600 transition shadow-sm font-medium">Logout</a>
-            </div>
-          )}
+                  {session && (
+                    <div className="flex gap-4 items-center">
+                      <span className="text-slate-300 text-sm hidden sm:inline">👤 {session.user?.name}</span>
+                      <SignOutButton />
+                    </div>
+                  )}
         </div>
       </nav>
       <main className="flex-grow container mx-auto p-4 sm:p-6 lg:p-8">

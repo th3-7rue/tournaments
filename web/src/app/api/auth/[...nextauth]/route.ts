@@ -3,6 +3,10 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import prisma from "@/lib/prisma"
 
+if (!process.env.NEXTAUTH_SECRET) {
+  console.warn('NEXTAUTH_SECRET non impostato. Le sessioni JWT potrebbero non persistere tra restart del processo. Imposta NEXTAUTH_SECRET in produzione.')
+}
+
 const handler = NextAuth({
   providers: [
     CredentialsProvider({
@@ -50,6 +54,8 @@ const handler = NextAuth({
   session: {
     strategy: "jwt",
   },
+  secret: process.env.NEXTAUTH_SECRET,
+  debug: process.env.NODE_ENV !== 'production',
   pages: {
     signIn: '/admin/login',
   },

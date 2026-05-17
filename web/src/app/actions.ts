@@ -193,13 +193,8 @@ export async function updateMatchScore(formData: FormData): Promise<void> {
     },
   });
 
-  // Fetch tournament sport separately to avoid TS include type errors
-  const tournament = await prisma.tournament.findUniqueOrThrow({
-    where: { id: match.tournamentId },
-    select: { sport: true },
-  });
-
-  await recalculateStandings(match.tournamentId, tournament.sport);
+  // Aggiorna le classifiche in modo incrementale per le squadre coinvolte
+  await updateStandings(match.id);
 
   try {
     // Comunica al server Socket.io che c'è stato un aggiornamento
@@ -217,6 +212,164 @@ export async function updateMatchScore(formData: FormData): Promise<void> {
   revalidatePath(`/admin/matches`);
   revalidatePath(`/tournament/${match.tournamentId}`);
   revalidatePath(`/`);
+}
+
+/**
+ * Aggiorna in modo incrementale le classifiche per le due squadre di un singolo match.
+ * Questo evita di ricalcolare l'intero torneo quando non necessario.
+ */
+export async function updateStandings(matchId: string) {
+  const match = await (prisma.match as any).findUnique({
+    where: { id: matchId },
+    select: {
+      id: true,
+      tournamentId: true,
+      homeTeamId: true,
+      awayTeamId: true,
+      homeScore: true,
+      awayScore: true,
+      setScores: true,
+    },
+  });
+
+  if (!match) return;
+  if (!match.homeTeamId || !match.awayTeamId) return;
+
+  const tournament = await prisma.tournament.findUniqueOrThrow({
+    where: { id: match.tournamentId },
+    select: { sport: true },
+  });
+
+  const sport = tournament.sport as string;
+
+  // Carica tutte le partite finite del torneo per ciascuna delle due squadre
+  const teamIds = [match.homeTeamId, match.awayTeamId];
+
+  for (const teamId of teamIds) {
+    const finishedMatches = await (prisma.match as any).findMany({
+      where: {
+        tournamentId: match.tournamentId,
+        status: "FINISHED",
+        OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }],
+      },
+    });
+
+    // Inizializza aggregati
+    const agg = {
+      matchesPlayed: 0,
+      wins: 0,
+      draws: 0,
+      losses: 0,
+      points: 0,
+      goalsFor: 0,
+      goalsAgainst: 0,
+      goalDifference: 0,
+      pointsFor: 0,
+      pointsAgainst: 0,
+      pointsDifference: 0,
+    } as any;
+
+    for (const m of finishedMatches) {
+      const isHome = m.homeTeamId === teamId;
+      const teamScore = isHome ? m.homeScore ?? 0 : m.awayScore ?? 0;
+      const oppScore = isHome ? m.awayScore ?? 0 : m.homeScore ?? 0;
+
+      agg.matchesPlayed += 1;
+      agg.goalsFor += Number(teamScore) || 0;
+      agg.goalsAgainst += Number(oppScore) || 0;
+
+      if (isVolleyballSport(sport)) {
+        // pointsFor/Against from setScores
+        if (m.setScores) {
+          try {
+            const sets = m.setScores as any[];
+            for (const s of sets) {
+              agg.pointsFor += Number(isHome ? s.home : s.away) || 0;
+              agg.pointsAgainst += Number(isHome ? s.away : s.home) || 0;
+            }
+          } catch (e) {}
+        }
+
+        if (m.homeScore! > m.awayScore!) {
+          if (isHome) {
+            agg.wins += 1;
+            if (m.homeScore === 3 && m.awayScore! <= 1) agg.points += 3;
+            else if (m.homeScore === 3 && m.awayScore === 2) agg.points += 2;
+            else agg.points += 3;
+          } else {
+            agg.losses += 1;
+            if (m.homeScore === 3 && m.awayScore! <= 1) agg.points += 0;
+            else if (m.homeScore === 3 && m.awayScore === 2) agg.points += 1;
+          }
+        } else if (m.homeScore! < m.awayScore!) {
+          if (!isHome) {
+            agg.wins += 1;
+            if (m.awayScore === 3 && m.homeScore! <= 1) agg.points += 3;
+            else if (m.awayScore === 3 && m.homeScore === 2) agg.points += 2;
+            else agg.points += 3;
+          } else {
+            agg.losses += 1;
+            if (m.awayScore === 3 && m.homeScore! <= 1) agg.points += 0;
+            else if (m.awayScore === 3 && m.homeScore === 2) agg.points += 1;
+          }
+        }
+      } else {
+        if (teamScore > oppScore) {
+          agg.wins += 1;
+          agg.points += 3;
+        } else if (teamScore < oppScore) {
+          agg.losses += 1;
+        } else {
+          agg.draws += 1;
+          agg.points += 1;
+        }
+      }
+    }
+
+    agg.goalDifference = agg.goalsFor - agg.goalsAgainst;
+    agg.pointsDifference = agg.pointsFor - agg.pointsAgainst;
+
+    // Upsert/update standing for the team
+    const standing = await prisma.standing.findFirst({
+      where: { tournamentId: match.tournamentId, teamId },
+    });
+
+    if (standing) {
+      await (prisma.standing as any).update({
+        where: { id: standing.id },
+        data: {
+          points: agg.points,
+          matchesPlayed: agg.matchesPlayed,
+          wins: agg.wins,
+          draws: agg.draws,
+          losses: agg.losses,
+          goalsFor: agg.goalsFor,
+          goalsAgainst: agg.goalsAgainst,
+          goalDifference: agg.goalDifference,
+          pointsFor: agg.pointsFor,
+          pointsAgainst: agg.pointsAgainst,
+          pointsDifference: agg.pointsDifference,
+        },
+      });
+    }
+  }
+
+  // Revalidate tournament pages
+  revalidatePath(`/admin/matches`);
+  revalidatePath(`/tournament/${match.tournamentId}`);
+  revalidatePath(`/`);
+}
+
+export async function deleteTournament(formData: FormData) {
+  const id = formData.get("tournamentId") as string;
+  if (!id) throw new Error("ID torneo mancante");
+
+  // Cancella il torneo — le relazioni Prisma sono impostate con onDelete: Cascade
+  await prisma.tournament.delete({ where: { id } });
+
+  revalidatePath(`/admin/tournaments`);
+  revalidatePath(`/`);
+  redirect(`/admin/tournaments`);
 }
 
 export async function startMatch(matchId: string): Promise<void> {
