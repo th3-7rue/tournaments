@@ -960,6 +960,7 @@ export async function recalculateStandings(
   tournamentId: string,
   sport: string,
 ) {
+  // Reset all standings to 0 first
   await (prisma.standing as any).updateMany({
     where: { tournamentId },
     data: {
@@ -977,14 +978,18 @@ export async function recalculateStandings(
     },
   });
 
+  // Fetch all finished matches (including those with missing scores for validation)
   const matches = await (prisma.match as any).findMany({
     where: {
       tournamentId,
       status: "FINISHED",
-      homeScore: { not: null },
-      awayScore: { not: null },
     },
   });
+
+  // Filter matches with valid scores and team IDs
+  const validMatches = matches.filter(
+    (m: any) => m.homeScore !== null && m.awayScore !== null && m.homeScore !== undefined && m.awayScore !== undefined && m.homeTeamId && m.awayTeamId
+  );
 
   const currentStandings = await prisma.standing.findMany({
     where: { tournamentId },
@@ -992,69 +997,79 @@ export async function recalculateStandings(
   const standingsMap = new Map<string, any>();
   currentStandings.forEach((s) => standingsMap.set(s.teamId, s));
 
-  for (const m of matches) {
-    if (!m.homeTeamId || !m.awayTeamId) continue;
-    const h = standingsMap.get(m.homeTeamId);
-    const a = standingsMap.get(m.awayTeamId);
+  for (const m of validMatches) {
+    const h = standingsMap.get(m.homeTeamId!);
+    const a = standingsMap.get(m.awayTeamId!);
 
     if (!h || !a) continue;
 
     h.matchesPlayed += 1;
     a.matchesPlayed += 1;
-    h.goalsFor += m.homeScore!;
-    a.goalsFor += m.awayScore!;
-    h.goalsAgainst += m.awayScore!;
-    a.goalsAgainst += m.homeScore!;
-    h.goalDifference = h.goalsFor - h.goalsAgainst;
-    a.goalDifference = a.goalsFor - a.goalsAgainst;
+    h.goalsFor += Number(m.homeScore);
+    a.goalsFor += Number(m.awayScore);
+    h.goalsAgainst += Number(m.awayScore);
+    a.goalsAgainst += Number(m.homeScore);
 
     if (isVolleyballSport(sport)) {
-      // Calculate pointsFor and pointsAgainst from setScores if available
-      let mPointsForHome = 0;
-      let mPointsForAway = 0;
+      // Volleyball scoring rules
+      const homeScore = Number(m.homeScore);
+      const awayScore = Number(m.awayScore);
+      let setScores: any[] = [];
+
       if (m.setScores) {
         try {
-          const sets = m.setScores as any[];
-          sets.forEach((set) => {
-            mPointsForHome += Number(set.home) || 0;
-            mPointsForAway += Number(set.away) || 0;
-          });
+          setScores = Array.isArray(m.setScores) ? m.setScores : JSON.parse(JSON.stringify(m.setScores));
         } catch (e) {}
       }
+
+      // Calculate pointsFor and pointsAgainst from setScores
+      let mPointsForHome = 0;
+      let mPointsForAway = 0;
+      try {
+        setScores.forEach((set: any) => {
+          if (set && typeof set.home === "number") mPointsForHome += set.home;
+          if (set && typeof set.away === "number") mPointsForAway += set.away;
+        });
+      } catch (e) {}
 
       h.pointsFor += mPointsForHome;
       a.pointsFor += mPointsForAway;
       h.pointsAgainst += mPointsForAway;
       a.pointsAgainst += mPointsForHome;
+
+      h.goalDifference = h.goalsFor - h.goalsAgainst;
+      a.goalDifference = a.goalsFor - a.goalsAgainst;
       h.pointsDifference = h.pointsFor - h.pointsAgainst;
       a.pointsDifference = a.pointsFor - a.pointsAgainst;
 
-      if (m.homeScore! > m.awayScore!) {
+      if (homeScore > awayScore) {
         h.wins += 1;
         a.losses += 1;
-        if (m.homeScore! === 3 && m.awayScore! <= 1) {
+        if (homeScore === 3 && awayScore <= 1) {
           h.points += 3;
-        } else if (m.homeScore! === 3 && m.awayScore! === 2) {
+        } else if (homeScore === 3 && awayScore === 2) {
           h.points += 2;
           a.points += 1;
         } else {
-          // Fallback if not playing best of 5
           h.points += 3;
         }
-      } else if (m.homeScore! < m.awayScore!) {
+      } else if (awayScore > homeScore) {
         a.wins += 1;
         h.losses += 1;
-        if (m.awayScore! === 3 && m.homeScore! <= 1) {
+        if (awayScore === 3 && homeScore <= 1) {
           a.points += 3;
-        } else if (m.awayScore! === 3 && m.homeScore! === 2) {
+        } else if (awayScore === 3 && homeScore === 2) {
           a.points += 2;
           h.points += 1;
         } else {
-          // Fallback if not playing best of 5
           a.points += 3;
         }
+      } else {
+        h.points += 1;
+        a.points += 1;
       }
     } else {
+      // Football/soccer scoring rules
       if (m.homeScore! > m.awayScore!) {
         h.wins += 1;
         h.points += 3;
@@ -1072,6 +1087,7 @@ export async function recalculateStandings(
     }
   }
 
+  // Update all standings
   for (const s of standingsMap.values()) {
     await (prisma.standing as any).update({
       where: { id: s.id },

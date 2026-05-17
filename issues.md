@@ -11,7 +11,12 @@
 
      4. ✅ RESOLVED: Individual match deletion added at `/admin/matches/[matchId]/edit` with confirmation dialog. Admins can now delete specific matches without removing the whole tournament.
 
-     5. Standings recalculation: The recalculateStandings function is called on match save, but I need to verify it's actually handling all the edge cases properly.
+     5. ✅ RESOLVED: recalculateStandings now properly handles:
+         - Missing scores or team IDs (filters them out)
+         - Volleyball best-of-5 scoring (3-0/3-1 = 3 pts, 3-2 = 2-1 split)
+         - Beach volleyball as volleyball
+         - Football standard scoring (3 pts win, 1 pt draw)
+         - Teams without matches (kept at 0)
 
      6. No undo: Once a match is FINISHED, the admin can edit it (✎ Modifica link), but there's no undo if they made a mistake.
 
