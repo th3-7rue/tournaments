@@ -65,6 +65,71 @@ export async function createTournament(
   redirect("/admin/tournaments");
 }
 
+export async function updateTournament(
+  prevState: any,
+  formData: FormData,
+): Promise<{ error?: string } | undefined> {
+  // 1. Rate Limiting (5 richieste al minuto per utente/ip)
+  try {
+    await actionLimiter.check(5, "update_tournament_global");
+  } catch (e: any) {
+    return { error: e.message };
+  }
+
+  // Get tournamentId from formData
+  const tournamentId = formData.get("tournamentId") as string;
+
+  // 2. Validazione Zod
+  const rawData = {
+    name: formData.get("name"),
+    description: formData.get("description"),
+    format: formData.get("format") || "ROUND_ROBIN",
+    sport: formData.get("sport") || "FOOTBALL",
+    startDate: formData.get("startDate") || undefined,
+    endDate: formData.get("endDate") || undefined,
+    volleyballSets: formData.get("volleyballSets")
+      ? parseInt(formData.get("volleyballSets") as string)
+      : undefined,
+  };
+
+  const validated = CreateTournamentSchema.safeParse(rawData);
+  if (!validated.success) {
+    return {
+      error:
+        "Validazione fallita: " +
+        validated.error.issues.map((e: any) => e.message).join(", "),
+    };
+  }
+
+  // 3. Check if tournament exists
+  const tournament = await prisma.tournament.findUnique({
+    where: { id: tournamentId },
+  });
+  if (!tournament) {
+    return { error: "Torneo non trovato" };
+  }
+
+  // 4. Update tournament
+  await prisma.tournament.update({
+    where: { id: tournamentId },
+    data: {
+      name: validated.data.name,
+      description: validated.data.description,
+      format: validated.data.format as any,
+      sport: validated.data.sport as any,
+      startDate: validated.data.startDate ? new Date(validated.data.startDate) : tournament.startDate,
+      endDate: validated.data.endDate ? new Date(validated.data.endDate) : tournament.endDate,
+      volleyballSets: validated.data.volleyballSets ?? tournament.volleyballSets,
+    },
+  });
+
+  // 5. Revalidate and redirect
+  revalidatePath("/");
+  revalidatePath("/admin/tournaments");
+  revalidatePath(`/tournament/${tournamentId}`);
+  redirect(`/admin/tournaments/${tournamentId}`);
+}
+
 export async function createTeam(
   prevState: any,
   formData: FormData,
@@ -770,47 +835,6 @@ export async function deleteMatch(matchId: string): Promise<{ error?: string }> 
   revalidatePath(`/admin/matches`);
   revalidatePath(`/admin/tournaments/${match.tournamentId}`);
   return {};
-}
-
-export async function updateTournament(
-  prevState: any,
-  formData: FormData,
-): Promise<{ error?: string }> {
-  const rawData = {
-    tournamentId: formData.get("tournamentId"),
-    name: formData.get("name"),
-    startDate: formData.get("startDate"),
-    endDate: formData.get("endDate"),
-  };
-
-  if (!rawData.tournamentId || !rawData.name) {
-    return { error: "Campi obbligatori mancanti" };
-  }
-
-  const tournamentId = rawData.tournamentId as string;
-  const name = rawData.name as string;
-
-  const tournament = await prisma.tournament.findUnique({
-    where: { id: tournamentId },
-  });
-  if (!tournament) return { error: "Torneo non trovato" };
-
-  // Check if tournament is locked (schedule generated or matches exist)
-  if (tournament.status === "ONGOING") {
-    return { error: "Non puoi modificare un torneo già avviato. Devi prima sbloccarlo." };
-  }
-
-  await prisma.tournament.update({
-    where: { id: tournamentId },
-    data: {
-      name: name,
-      startDate: rawData.startDate ? new Date(rawData.startDate as string) : null,
-      endDate: rawData.endDate ? new Date(rawData.endDate as string) : null,
-    },
-  });
-
-  revalidatePath(`/admin/tournaments/${tournamentId}`);
-  redirect(`/admin/tournaments/${tournamentId}`);
 }
 
 export async function lockTournament(tournamentId: string): Promise<{ error?: string }> {

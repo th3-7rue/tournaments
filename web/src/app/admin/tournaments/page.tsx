@@ -64,6 +64,14 @@ export default async function TournamentsPage() {
                   <td className="p-4 text-center font-bold text-blue-600">
                     {t._count.teams}
                   </td>
+                  <td className="p-4">
+                    <Link
+                      href={`/admin/tournaments/${t.id}/edit`}
+                      className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      Modifica
+                    </Link>
+                  </td>
                 </tr>
               ))
             )}

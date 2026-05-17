@@ -15,6 +15,8 @@ export const CreateTournamentSchema = z.object({
   ]),
   sport: z.enum(SPORT_OPTIONS),
   volleyballSets: z.coerce.number().min(3).max(5).optional().default(5),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
 });
 
 export const CreateTeamSchema = z.object({

@@ -15,6 +15,8 @@ interface BracketMatch {
   awayTeamName?: string;
   stage: string;
   round: number;
+  nextMatchId?: string;
+  nextLoserMatchId?: string;
 }
 
 /**
@@ -261,6 +263,65 @@ export function generateDoubleElimination(
     stage: "FINAL",
     round: totalRounds + 1,
   };
+
+  // --- Set nextMatchId links for winner bracket ---
+  for (let roundIdx = 0; roundIdx < winnerRounds.length - 1; roundIdx++) {
+    const currentRound = winnerRounds[roundIdx];
+    const nextRound = winnerRounds[roundIdx + 1];
+
+    for (let i = 0; i < currentRound.length; i++) {
+      if (currentRound[i].homeTeamId !== null) {
+        const nextMatchIndex = Math.floor(i / 2);
+        if (nextMatchIndex < nextRound.length) {
+          nextRound[nextMatchIndex].nextMatchId = `${nextRound[nextMatchIndex].stage}_${nextMatchIndex}`;
+        }
+      }
+    }
+  }
+
+  // --- Set nextMatchId links for loser bracket ---
+  for (let roundIdx = 0; roundIdx < loserRounds.length - 1; roundIdx++) {
+    const currentRound = loserRounds[roundIdx];
+    const nextRound = loserRounds[roundIdx + 1];
+
+    for (let i = 0; i < currentRound.length; i++) {
+      if (currentRound[i].homeTeamId !== null) {
+        const nextMatchIndex = Math.floor(i / 2);
+        if (nextMatchIndex < nextRound.length) {
+          nextRound[nextMatchIndex].nextMatchId = `${nextRound[nextMatchIndex].stage}_${nextMatchIndex}`;
+        }
+      }
+    }
+  }
+
+  // --- Set nextLoserMatchId links (loser of this match plays in next round) ---
+  // Winner bracket: loser goes to loser bracket
+  for (let roundIdx = 0; roundIdx < winnerRounds.length; roundIdx++) {
+    for (let i = 0; i < winnerRounds[roundIdx].length; i++) {
+      if (winnerRounds[roundIdx][i].homeTeamId !== null) {
+        // Find the corresponding loser bracket match
+        const totalRoundsMinusOne = totalRounds - 1;
+        const loserRoundIdx = Math.min(roundIdx, totalRoundsMinusOne - 1);
+        const loserMatchIndex = Math.floor(i / 2);
+        
+        if (loserRoundIdx < loserRounds.length && loserMatchIndex < loserRounds[loserRoundIdx].length) {
+          loserRounds[loserRoundIdx][loserMatchIndex].nextLoserMatchId = `${loserRounds[loserRoundIdx][loserMatchIndex].stage}_${loserMatchIndex}`;
+        }
+      }
+    }
+  }
+
+  // Loser bracket: loser goes to next loser bracket round
+  for (let roundIdx = 0; roundIdx < loserRounds.length - 1; roundIdx++) {
+    for (let i = 0; i < loserRounds[roundIdx].length; i++) {
+      if (loserRounds[roundIdx][i].homeTeamId !== null) {
+        const nextMatchIndex = Math.floor(i / 2);
+        if (roundIdx + 1 < loserRounds.length && nextMatchIndex < loserRounds[roundIdx + 1].length) {
+          loserRounds[roundIdx + 1][nextMatchIndex].nextLoserMatchId = `${loserRounds[roundIdx + 1][nextMatchIndex].stage}_${nextMatchIndex}`;
+        }
+      }
+    }
+  }
 
   return { winnerRounds, loserRounds, grandFinalMatch };
 }

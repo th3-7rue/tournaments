@@ -23,7 +23,11 @@
          - Revert to previous match state using the ↩️ undo button on the edit page
          - History tracks all match edits with timestamps and previous/next values
 
-     7. Double Elimination complexity: The generation handles nextMatchId and nextLoserMatchId, but I should check whether the losers' bracket actually gets populated correctly.
+     7. ✅ RESOLVED: Double Elimination bracket now properly links matches with `nextMatchId` and `nextLoserMatchId`:
+         - Winner bracket: nextMatchId links to following round
+         - Loser bracket: nextMatchId links to following loser bracket round
+         - Winner bracket losers: nextLoserMatchId links to corresponding loser bracket match
+         - Loser bracket losers: nextLoserMatchId links to next loser bracket round
 
      8. No tournament edit after creation: There's no /admin/tournaments/[id]/edit page - you can't change the sport, format, name, etc. once created.
 

@@ -67,6 +67,12 @@ export default async function TournamentDetail({
             📋 Gestione Gironi →
           </Link>
         )}
+        <Link
+          href={`/admin/tournaments/${id}/edit`}
+          className="text-sm text-indigo-600 font-medium hover:underline flex items-center gap-2"
+        >
+          ✎ Modifica Torneo →
+        </Link>
       </div>
 
       {/* Groups Summary */}
