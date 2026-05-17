@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { generateRoundRobin } from "@/lib/berger";
 import { io } from "socket.io-client";
 import prisma from "@/lib/prisma";
 import { actionLimiter } from "@/lib/rate-limit";
@@ -13,6 +12,12 @@ import {
   CreateGroupSchema,
   UpdateScoreSchema,
 } from "@/lib/validations";
+import {
+  generateRoundRobin,
+  generateSingleElimination,
+  generateDoubleElimination,
+  generateChampionsLeague,
+} from "@/lib/brackets";
 
 export async function createTournament(
   prevState: any,
@@ -162,6 +167,7 @@ export async function generateTournamentMatches(
   formData: FormData,
 ): Promise<void> {
   const tournamentId = formData.get("tournamentId") as string;
+  const format = formData.get("format") || "ROUND_ROBIN";
 
   const tournament = await prisma.tournament.findUnique({
     where: { id: tournamentId },
@@ -176,10 +182,6 @@ export async function generateTournamentMatches(
   if (tournament.matches.length > 0)
     throw new Error("Il calendario è già stato generato");
 
-  // Genera il calendario (solo andata per ora)
-  const isDoubleRoundRobin = false;
-  const schedule = generateRoundRobin(tournament.teams, isDoubleRoundRobin);
-
   // Inizializza la classifica per tutte le squadre
   const standingsData = tournament.teams.map((team) => ({
     tournamentId: tournament.id,
@@ -191,30 +193,262 @@ export async function generateTournamentMatches(
     skipDuplicates: true,
   });
 
+  // Genera il calendario in base al formato
   let matchDate = new Date();
+  let matchCount = 0;
 
-  for (let roundIndex = 0; roundIndex < schedule.length; roundIndex++) {
-    const round = schedule[roundIndex];
-    matchDate = new Date(matchDate);
-    matchDate.setDate(matchDate.getDate() + 7); // Una partita a settimana
+  switch (format) {
+    case "ROUND_ROBIN": {
+      const isDoubleRoundRobin = false;
+      const schedule = generateRoundRobin(tournament.teams, isDoubleRoundRobin);
 
-    for (const match of round) {
-      const homeTeam = match[0];
-      const awayTeam = match[1];
+      for (let roundIndex = 0; roundIndex < schedule.length; roundIndex++) {
+        const round = schedule[roundIndex];
+        matchDate = new Date(matchDate);
+        matchDate.setDate(matchDate.getDate() + 7); // Una partita a settimana
 
-      // Se una squadra è "null", riposa
-      if (!homeTeam || !awayTeam) continue;
+        for (const match of round) {
+          const homeTeam = match[0];
+          const awayTeam = match[1];
 
-      await prisma.match.create({
-        data: {
-          tournamentId: tournament.id,
-          homeTeamId: homeTeam.id,
-          awayTeamId: awayTeam.id,
-          stage: "GROUP_STAGE",
-          matchDate: matchDate,
-        },
-      });
+          // Se una squadra è "null", riposa
+          if (!homeTeam || !awayTeam) continue;
+
+          await prisma.match.create({
+            data: {
+              tournamentId: tournament.id,
+              homeTeamId: homeTeam.id,
+              awayTeamId: awayTeam.id,
+              stage: "GROUP_STAGE",
+              bracket: "NONE",
+              matchDate: matchDate,
+            },
+          });
+          matchCount++;
+        }
+      }
+      break;
     }
+
+    case "SINGLE_ELIMINATION": {
+      const { rounds } = generateSingleElimination(tournament.teams);
+      const totalRounds = rounds.length;
+
+      for (let roundIdx = 0; roundIdx < totalRounds; roundIdx++) {
+        const round = rounds[roundIdx];
+        matchDate = new Date(matchDate);
+        matchDate.setDate(matchDate.getDate() + 7);
+
+        for (const match of round) {
+          // Skip matches without teams
+          if (!match.homeTeamId || !match.awayTeamId) continue;
+
+          // Determine stage based on round number
+          let stage: "GROUP_STAGE" | "ROUND_OF_16" | "QUARTER_FINAL" | "SEMI_FINAL" | "FINAL" | "BRONZE_FINAL" =
+            "GROUP_STAGE";
+          const roundsFromEnd = totalRounds - roundIdx;
+          if (roundsFromEnd === 1) stage = "FINAL";
+          else if (roundsFromEnd === 2) stage = "SEMI_FINAL";
+          else if (roundsFromEnd === 3) stage = "QUARTER_FINAL";
+          else if (roundsFromEnd === 4) stage = "ROUND_OF_16";
+
+          await prisma.match.create({
+            data: {
+              tournamentId: tournament.id,
+              homeTeamId: match.homeTeamId,
+              awayTeamId: match.awayTeamId,
+              stage: stage,
+              bracket: "WINNER",
+              matchDate: matchDate,
+            },
+          });
+          matchCount++;
+        }
+      }
+      break;
+    }
+
+    case "DOUBLE_ELIMINATION": {
+      const { winnerRounds, loserRounds, grandFinalMatch } = generateDoubleElimination(
+        tournament.teams,
+      );
+
+      // Winner bracket
+      const totalWinnerRounds = winnerRounds.length;
+      for (let roundIdx = 0; roundIdx < totalWinnerRounds; roundIdx++) {
+        const round = winnerRounds[roundIdx];
+        matchDate = new Date(matchDate);
+        matchDate.setDate(matchDate.getDate() + 7);
+
+        for (const match of round) {
+          if (!match.homeTeamId || !match.awayTeamId) continue;
+
+          let stage: "GROUP_STAGE" | "ROUND_OF_16" | "QUARTER_FINAL" | "SEMI_FINAL" | "FINAL" =
+            "GROUP_STAGE";
+          const roundsFromEnd = totalWinnerRounds - roundIdx;
+          if (roundsFromEnd === 1) stage = "FINAL";
+          else if (roundsFromEnd === 2) stage = "SEMI_FINAL";
+          else if (roundsFromEnd === 3) stage = "QUARTER_FINAL";
+          else if (roundsFromEnd === 4) stage = "ROUND_OF_16";
+
+          await prisma.match.create({
+            data: {
+              tournamentId: tournament.id,
+              homeTeamId: match.homeTeamId,
+              awayTeamId: match.awayTeamId,
+              stage: stage,
+              bracket: "WINNER",
+              matchDate: matchDate,
+            },
+          });
+          matchCount++;
+        }
+      }
+
+      // Loser bracket
+      const totalLoserRounds = loserRounds.length;
+      for (let roundIdx = 0; roundIdx < totalLoserRounds; roundIdx++) {
+        const round = loserRounds[roundIdx];
+        matchDate = new Date(matchDate);
+        matchDate.setDate(matchDate.getDate() + 7);
+
+        for (const match of round) {
+          if (!match.homeTeamId || !match.awayTeamId) continue;
+
+          let stage: "GROUP_STAGE" | "ROUND_OF_16" | "QUARTER_FINAL" | "SEMI_FINAL" | "FINAL" =
+            "GROUP_STAGE";
+          const roundsFromEnd = totalLoserRounds - roundIdx;
+          if (roundsFromEnd === 1) stage = "FINAL";
+          else if (roundsFromEnd === 2) stage = "SEMI_FINAL";
+          else if (roundsFromEnd === 3) stage = "QUARTER_FINAL";
+          else if (roundsFromEnd === 4) stage = "ROUND_OF_16";
+
+          await prisma.match.create({
+            data: {
+              tournamentId: tournament.id,
+              homeTeamId: match.homeTeamId,
+              awayTeamId: match.awayTeamId,
+              stage: stage,
+              bracket: "LOSER",
+              matchDate: matchDate,
+            },
+          });
+          matchCount++;
+        }
+      }
+
+      // Grand final (if not already created)
+      if (grandFinalMatch && grandFinalMatch.homeTeamId && grandFinalMatch.awayTeamId) {
+        matchDate = new Date(matchDate);
+        matchDate.setDate(matchDate.getDate() + 7);
+
+        await prisma.match.create({
+          data: {
+            tournamentId: tournament.id,
+            homeTeamId: grandFinalMatch.homeTeamId,
+            awayTeamId: grandFinalMatch.awayTeamId,
+            stage: "FINAL",
+            bracket: "WINNER",
+            matchDate: matchDate,
+          },
+        });
+        matchCount++;
+      }
+      break;
+    }
+
+    case "CHAMPIONS_LEAGUE": {
+      const { groups, groupMatches, knockoutRounds } = generateChampionsLeague(
+        tournament.teams,
+        tournament.volleyballSets,
+      );
+
+      // Create groups in database
+      const groupPromises = groups.map(async (group) => {
+        return prisma.group.create({
+          data: {
+            name: group.name,
+            tournamentId: tournament.id,
+          },
+        });
+      });
+
+      // Create group matches
+      for (const gm of groupMatches) {
+        matchDate = new Date(matchDate);
+        matchDate.setDate(matchDate.getDate() + 7);
+
+        for (const match of gm.matches) {
+          if (!match.homeTeamId || !match.awayTeamId) continue;
+
+          await prisma.match.create({
+            data: {
+              tournamentId: tournament.id,
+              homeTeamId: match.homeTeamId,
+              awayTeamId: match.awayTeamId,
+              stage: "GROUP_STAGE",
+              bracket: "NONE",
+              matchDate: matchDate,
+            },
+          });
+          matchCount++;
+        }
+      }
+
+      // Create knockout bracket matches
+      const totalKnockoutRounds = knockoutRounds.length;
+      for (let roundIdx = 0; roundIdx < totalKnockoutRounds; roundIdx++) {
+        const round = knockoutRounds[roundIdx];
+        matchDate = new Date(matchDate);
+        matchDate.setDate(matchDate.getDate() + 7);
+
+        for (const match of round) {
+          if (!match.homeTeamId || !match.awayTeamId) continue;
+
+          let stage: "GROUP_STAGE" | "ROUND_OF_16" | "QUARTER_FINAL" | "SEMI_FINAL" | "FINAL" =
+            "GROUP_STAGE";
+          const roundsFromEnd = totalKnockoutRounds - roundIdx;
+          if (roundsFromEnd === 1) stage = "FINAL";
+          else if (roundsFromEnd === 2) stage = "SEMI_FINAL";
+          else if (roundsFromEnd === 3) stage = "QUARTER_FINAL";
+          else if (roundsFromEnd === 4) stage = "ROUND_OF_16";
+
+          await prisma.match.create({
+            data: {
+              tournamentId: tournament.id,
+              homeTeamId: match.homeTeamId,
+              awayTeamId: match.awayTeamId,
+              stage: stage,
+              bracket: "WINNER",
+              matchDate: matchDate,
+            },
+          });
+          matchCount++;
+        }
+      }
+
+      // Create group records
+      await Promise.all(groupPromises);
+
+      // Assign teams to groups (create Team records with groupId)
+      // This is handled by the Group creation cascade, but we need to ensure teams are assigned
+      for (let g = 0; g < groups.length; g++) {
+        const groupTeamIds = groups[g].teamIds;
+        for (let t = 0; t < groupTeamIds.length; t++) {
+          const team = tournament.teams.find((tm) => tm.id === groupTeamIds[t]);
+          if (team) {
+            await prisma.team.update({
+              where: { id: team.id },
+              data: { groupId: await (prisma.group as any).findUnique({ where: { name: groups[g].name } })?.id },
+            });
+          }
+        }
+      }
+      break;
+    }
+
+    default:
+      throw new Error(`Formato non supportato: ${format}`);
   }
 
   await prisma.tournament.update({

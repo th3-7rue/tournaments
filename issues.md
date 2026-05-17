@@ -3,10 +3,11 @@
 
      2. ✅ RESOLVED: Groups management UI added at `/admin/tournaments/[id]/groups` with full CRUD operations
 
-     3. Bracket format generation: The generateTournamentMatches action uses the Berger algorithm which is specifically for Round Robin, so I'm not sure how it would handle Single Elimination,
-
-        Double Elimination, or Champions League formats—the action description mentions generating schedules based on tournament format, but the current implementation seems to only cover Round
-         Robin.
+     3. ✅ RESOLVED: generateTournamentMatches now supports all formats:
+         - ROUND_ROBIN: Uses Berger algorithm
+         - SINGLE_ELIMINATION: Knockout bracket with BYEs for non-power-of-2 teams
+         - DOUBLE_ELIMINATION: Winner + Loser brackets with grand final
+         - CHAMPIONS_LEAGUE: Group stage + knockout bracket
 
      4. No way to delete individual matches: If something goes wrong during generation, the admin can only delete the whole tournament.
 
