@@ -42,7 +42,7 @@ export default function DeleteTeamButton({ teamId, teamName, onDeleted }: Props)
     <button
       onClick={handleDelete}
       disabled={isDeleting}
-      className="text-xs bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700 transition disabled:opacity-50 font-medium"
+      className="text-xs bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700 transition disabled:opacity-70 font-medium"
     >
       {isDeleting ? "Eliminazione..." : "Elimina"}
     </button>

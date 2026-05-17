@@ -40,7 +40,7 @@ export default function DeleteButton({ matchId }: DeleteButtonProps) {
     <button
       onClick={handleClick}
       disabled={isPending}
-      className="text-xs text-red-500 hover:text-red-600 transition flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="text-xs text-red-700 hover:text-red-600 transition flex items-center gap-1 disabled:opacity-70 disabled:cursor-not-allowed"
     >
       {isPending ? (
         <>

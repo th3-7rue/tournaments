@@ -95,7 +95,7 @@ export default function MatchForm({
 
         {isVolleyball ? (
           <div className="flex flex-col items-center justify-center gap-2">
-            <div className="flex gap-2 text-xs font-semibold text-slate-400">
+            <div className="flex gap-2 text-xs font-semibold text-slate-600">
               {Array.from({ length: maxSets }).map((_, i) => (
                 <div key={i} className="w-10 text-center">
                   S{i + 1}
@@ -112,7 +112,7 @@ export default function MatchForm({
                     onChange={(e) => updateSet(i, "home", e.target.value)}
                     min="0"
                     placeholder="-"
-                    className="w-10 h-8 text-center font-bold text-sm border border-slate-300 rounded bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-200 outline-none transition"
+                    className="w-10 h-8 text-center font-bold text-sm text-slate-900 bg-white border border-slate-300 rounded focus:border-indigo-500 focus:ring-1 focus:ring-indigo-200 outline-none transition placeholder:text-slate-400"
                   />
                   <input
                     id={`set-away-${match.id}-${i}`}
@@ -121,7 +121,7 @@ export default function MatchForm({
                     onChange={(e) => updateSet(i, "away", e.target.value)}
                     min="0"
                     placeholder="-"
-                    className="w-10 h-8 text-center font-bold text-sm border border-slate-300 rounded bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-200 outline-none transition"
+                    className="w-10 h-8 text-center font-bold text-sm text-slate-900 bg-white border border-slate-300 rounded focus:border-indigo-500 focus:ring-1 focus:ring-indigo-200 outline-none transition placeholder:text-slate-400"
                   />
                 </div>
               ))}
@@ -137,9 +137,9 @@ export default function MatchForm({
               onChange={(e) => setHomeScore(e.target.value)}
               required
               min="0"
-              className="w-12 h-10 text-center font-black text-lg border-2 border-slate-300 rounded bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition"
+              className="w-12 h-10 text-center font-black text-lg text-slate-900 bg-white border-2 border-slate-300 rounded focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition"
             />
-            <span className="font-bold text-slate-400">-</span>
+            <span className="font-bold text-slate-600">-</span>
             <input
               id={`away-score-${match.id}`}
               type="number"
@@ -148,7 +148,7 @@ export default function MatchForm({
               onChange={(e) => setAwayScore(e.target.value)}
               required
               min="0"
-              className="w-12 h-10 text-center font-black text-lg border-2 border-slate-300 rounded bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition"
+              className="w-12 h-10 text-center font-black text-lg text-slate-900 bg-white border-2 border-slate-300 rounded focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition"
             />
           </div>
         )}

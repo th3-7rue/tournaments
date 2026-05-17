@@ -122,7 +122,7 @@ export default function AdminMatchesPage() {
                     )}
                     <Link
                       href={`/admin/matches/${m.id}/edit`}
-                      className="text-xs text-slate-400 hover:text-slate-600 transition"
+                      className="text-xs text-slate-600 hover:text-slate-700 transition"
                     >
                       ✎ Modifica
                     </Link>
