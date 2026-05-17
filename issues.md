@@ -9,7 +9,7 @@
          - DOUBLE_ELIMINATION: Winner + Loser brackets with grand final
          - CHAMPIONS_LEAGUE: Group stage + knockout bracket
 
-     4. No way to delete individual matches: If something goes wrong during generation, the admin can only delete the whole tournament.
+     4. ✅ RESOLVED: Individual match deletion added at `/admin/matches/[matchId]/edit` with confirmation dialog. Admins can now delete specific matches without removing the whole tournament.
 
      5. Standings recalculation: The recalculateStandings function is called on match save, but I need to verify it's actually handling all the edge cases properly.
 
@@ -38,7 +38,6 @@
      16. No group creation for multi-group tournaments: Round Robin with more teams than fits in one group doesn't show how to create multiple groups.
 
      Workflow Gaps
-     - No team removal: Once a team is added, there's no delete UI. A typo forces a full tournament deletion.
      - No group management: The schema has a Group model, but there's zero UI for creating groups. Round Robin with many teams can't split into multiple groups.
      - No tournament edit: Name, sport, format, and dates are immutable after creation. A wrong sport selection = recreate everything.
      - Generate is irreversible: The action sets status to ONGOING. You can't go back to DRAFT to add teams or fix the schedule.
@@ -49,7 +48,6 @@
      - No validation on team count for bracket formats. Single Elimination needs a power of 2, but there's no warning at creation time.
 
     Data Integrity
-     - No match deletion: If the generated schedule is wrong, there's no way to delete individual matches — only cascade-delete the whole tournament.
      - Bracket format chains are fragile: In Single/Double Elimination, if a match result is edited after the next round has started, downstream matches aren't invalidated or re-linked.
      - No COMPLETED transition trigger: The tournament status never automatically becomes COMPLETED when all matches finish. It stays ONGOING until someone manually updates it.
 

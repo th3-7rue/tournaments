@@ -1,20 +1,56 @@
+"use client";
+
 import MatchForm from "./MatchForm";
 import prisma from "@/lib/prisma";
 import Link from "next/link";
+import { deleteMatchServerAction } from "@/app/delete-match";
+import { useEffect, useState } from "react";
+import { deleteMatch } from "@/app/actions";
 import { SPORT_DISPLAY_NAMES } from "@/lib/sports";
+import DeleteButton from "./DeleteButton";
+
+interface TournamentData {
+  id: string;
+  name: string;
+  sport: string;
+  matches: Array<{
+    id: string;
+    homeTeam: { name: string };
+    awayTeam: { name: string };
+    status: string;
+  }>;
+}
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminMatchesPage() {
-  const tournaments = await prisma.tournament.findMany({
-    where: { status: { in: ["ONGOING", "COMPLETED"] } },
-    include: {
-      matches: {
-        include: { homeTeam: true, awayTeam: true },
-        orderBy: { matchDate: "asc" },
-      },
-    },
-  });
+export default function AdminMatchesPage() {
+  const [tournaments, setTournaments] = useState<TournamentData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchTournaments() {
+      try {
+        const res = await fetch("/api/admin/matches", { cache: "no-store" });
+        const data = await res.json();
+        setTournaments(data);
+      } catch (e) {
+        console.error("Failed to fetch tournaments:", e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchTournaments();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto text-center py-12">
+        <div className="text-2xl font-semibold text-slate-600">
+          Caricamento risultati...
+        </div>
+      </div>
+    );
+  }
 
   if (tournaments.length === 0) {
     return (
@@ -44,7 +80,7 @@ export default async function AdminMatchesPage() {
         </p>
       </div>
 
-      {tournaments.map((tournament: (typeof tournaments)[number]) => (
+      {tournaments.map((tournament) => (
         <div
           key={tournament.id}
           className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
@@ -62,9 +98,8 @@ export default async function AdminMatchesPage() {
             {tournament.matches.length === 0 ? (
               <p className="text-slate-500 italic">Nessuna partita generata.</p>
             ) : (
-              tournament.matches.map((m: any) => (
+              tournament.matches.map((m) => (
                 <div key={m.id} className="space-y-2">
-                  {/* Live Scorer button */}
                   <div className="flex items-center justify-end gap-2 mb-1">
                     {m.status !== "FINISHED" && (
                       <Link
@@ -85,14 +120,13 @@ export default async function AdminMatchesPage() {
                         )}
                       </Link>
                     )}
-                    {m.status === "FINISHED" && (
-                      <Link
-                        href={`/admin/matches/${m.id}/live`}
-                        className="text-xs text-slate-400 hover:text-slate-600 transition"
-                      >
-                        ✎ Modifica
-                      </Link>
-                    )}
+                    <Link
+                      href={`/admin/matches/${m.id}/edit`}
+                      className="text-xs text-slate-400 hover:text-slate-600 transition"
+                    >
+                      ✎ Modifica
+                    </Link>
+                    <DeleteButton matchId={m.id} />
                   </div>
 
                   <MatchForm match={m} tournament={tournament} />
