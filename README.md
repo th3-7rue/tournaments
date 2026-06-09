@@ -39,8 +39,8 @@ Prerequisites: [Node.js](https://nodejs.org/) (v18+), [npm](https://www.npmjs.co
 
 3. **Create environment file**:
    ```bash
-   cp .env.example .env.local
-   # Or manually create .env.local with:
+   cp .env.example .env
+   # Or manually create .env with:
    # DATABASE_URL=postgresql://admin:password123@localhost:5432/tournament_db?schema=public
    # NEXTAUTH_SECRET=supersecret123
    # NEXTAUTH_URL=http://localhost:3000

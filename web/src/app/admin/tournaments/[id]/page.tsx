@@ -1,4 +1,4 @@
-import { generateTournamentMatches, unlockTournament } from "@/app/actions";
+import { generateTournamentMatches, unlockTournament, deleteTeam } from "@/app/actions";
 import Link from "next/link";
 import prisma from "@/lib/prisma";
 import { SPORT_DISPLAY_NAMES } from "@/lib/sports";
@@ -6,6 +6,10 @@ import { default as dynamicImport } from "next/dynamic";
 
 const DeleteTournamentButton = dynamicImport(
   () => import("@/components/DeleteTournamentButton"),
+);
+
+const DeleteTeamButton = dynamicImport(
+  () => import("@/components/DeleteTeamButton"),
 );
 
 export const dynamic = "force-dynamic";
@@ -36,6 +40,9 @@ export default async function TournamentDetail({
   });
 
   if (!tournament) return <div>Torneo non trovato</div>;
+
+  // Check if there are any pending delete requests (simulated via session/query param in production)
+  const pendingTeamId = null; // In production, this would come from URL params or session
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
@@ -127,7 +134,15 @@ export default async function TournamentDetail({
                   <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs">
                     {t.name.substring(0, 2).toUpperCase()}
                   </div>
-                  {t.name}
+                  <span>{t.name}</span>
+                  {tournament.status === "DRAFT" && (
+                    <DeleteTeamButton
+                      teamId={t.id}
+                      teamName={t.name}
+                      tournamentId={tournament.id}
+                      tournamentName={tournament.name}
+                    />
+                  )}
                 </li>
               ))}
             </ul>

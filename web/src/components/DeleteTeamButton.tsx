@@ -1,21 +1,25 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
 interface Props {
   teamId: string
   teamName: string
-  onDeleted: () => void
+  tournamentId: string
+  tournamentName: string
+  onDeleted?: () => void
 }
 
-export default function DeleteTeamButton({ teamId, teamName, onDeleted }: Props) {
+export default function DeleteTeamButton({ teamId, teamName, tournamentId, tournamentName, onDeleted }: Props) {
   const [isDeleting, setIsDeleting] = useState(false)
+  const router = useRouter()
 
   const handleDelete = async () => {
     if (
       !confirm(
-        `Sei sicuro di voler cancellare "${teamName}"? Tutte le partite associate verranno eliminate.`,
+        `Sei sicuro di voler cancellare "${teamName}" da ${tournamentName}? Tutte le partite associate verranno eliminate.`,
       )
     )
       return
@@ -29,8 +33,11 @@ export default function DeleteTeamButton({ teamId, teamName, onDeleted }: Props)
       })
       const j = await res.json()
       if (!res.ok) throw new Error(j.error || "Errore nella cancellazione")
+      
       toast.success("Squadra eliminata")
-      onDeleted()
+      if (onDeleted) onDeleted()
+      // Refresh the page or navigate to update UI
+      router.refresh()
     } catch (e: any) {
       toast.error("Eliminazione fallita", { description: e.message || e })
     } finally {
